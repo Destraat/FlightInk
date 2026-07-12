@@ -85,24 +85,24 @@ def _draw_details(draw: ImageDraw.ImageDraw, aircraft: Aircraft, fonts: dict[str
         draw.text((x,y+137), prediction.label, font=fonts["tiny"], fill=45)
     altitude = f"{aircraft.altitude_ft:,.0f} ft" if aircraft.altitude_ft is not None else "onbekend"
     speed = f"{aircraft.speed_knots*1.852:,.0f} km/u" if aircraft.speed_knots is not None else "onbekend"
-    for yy,(label,value) in zip((273,321,369),[("AFSTAND NU",f"{aircraft.distance_km:.1f} km"),("HOOGTE",altitude),("SNELHEID",speed)]):
+    for yy,(label,value) in zip((254,300,346),[("AFSTAND NU",f"{aircraft.distance_km:.1f} km"),("HOOGTE",altitude),("SNELHEID",speed)]):
         draw.text((x,yy), label, font=fonts["tiny"], fill=80)
-        draw.text((x,yy+15), value, font=fonts["body_bold"], fill=20)
+        draw.text((x,yy+14), value, font=fonts["body_bold"], fill=20)
 
 
 def _draw_footer(draw: ImageDraw.ImageDraw, weather: Weather | None, stats: dict[str, int], fonts: dict[str, ImageFont.ImageFont], stale_minutes: int | None) -> None:
-    draw.line((28,368,772,368), fill=100, width=1)
+    draw.line((28,394,772,394), fill=100, width=1)
     if weather:
         temp = f"{weather.temperature_c:.1f} °C" if weather.temperature_c is not None else "-- °C"
         clouds = f"{weather.cloud_cover}% bewolking" if weather.cloud_cover is not None else "bewolking onbekend"
         text = f"WEER   {temp} · {clouds}"
     else:
         text = "WEER   niet beschikbaar"
-    draw.text((28,385), text, font=fonts["body_bold"], fill=30)
+    draw.text((28,407), text, font=fonts["body_bold"], fill=30)
     passages = int(stats.get("passages",stats.get("unique_aircraft",0)))
-    draw.text((28,420), f"Vandaag {passages} passages", font=fonts["small"], fill=55)
+    draw.text((28,442), f"Vandaag {passages} passages", font=fonts["small"], fill=55)
     freshness = f" · data {stale_minutes} min oud" if stale_minutes else ""
-    draw.text((545,420), datetime.now().strftime("Bijgewerkt %H:%M")+freshness, font=fonts["small"], fill=55)
+    draw.text((545,442), datetime.now().strftime("Bijgewerkt %H:%M")+freshness, font=fonts["small"], fill=55)
 
 
 def _cloud(draw: ImageDraw.ImageDraw, x: int, y: int, scale: float) -> None:
