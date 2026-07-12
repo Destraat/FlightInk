@@ -1,0 +1,17 @@
+[Unit]
+Description=FlightInk e-ink flight display
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/flightink
+EnvironmentFile=/opt/flightink/.env
+ExecStart=/opt/flightink/.venv/bin/python /opt/flightink/main.py
+Restart=always
+RestartSec=15
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

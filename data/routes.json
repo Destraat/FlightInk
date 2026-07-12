@@ -1,0 +1,7 @@
+{
+  "KLM1000*": {"origin": "Londen", "destination": "AMS"},
+  "KLM1200*": {"origin": "Amsterdam", "destination": "CDG"},
+  "KLM1400*": {"origin": "Amsterdam", "destination": "BCN"},
+  "TRA*": {"origin": "Amsterdam", "destination": null},
+  "RYR*": {"origin": null, "destination": null}
+}

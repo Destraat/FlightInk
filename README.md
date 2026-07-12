@@ -2,67 +2,84 @@
 
 ![FlightInk preview](assets/flightink-preview.svg)
 
-FlightInk toont automatisch het vliegtuig dat het dichtst bij je huis vliegt op een 800×480 e-inkscherm. De applicatie gebruikt gratis databronnen en lokale rendering.
+FlightInk toont automatisch het vliegtuig dat het dichtst bij je huis vliegt op een 800×480 e-inkscherm. De applicatie gebruikt gratis ADS-B- en weerdata, lokale catalogi en volledig lokale rendering.
 
-## Wat werkt
+## Inbegrepen
 
 - live ADS-B-posities via Airplanes.live;
-- selectie van het dichtstbijzijnde toestel;
-- callsign, registratie, type, hoogte, snelheid en afstand;
-- een groot vliegtuig in zijaanzicht, volledig getekend met Python/Pillow;
-- eenvoudige maatschappij-aankleding op basis van het callsign;
-- spiegeling op basis van de vliegrichting;
-- actuele temperatuur en bewolking via Open-Meteo;
-- zwart-wit PNG-uitvoer voor e-ink naar `output/flightink.png`.
+- actuele temperatuur, bewolking en wind via Open-Meteo;
+- selectie en filtering van het meest relevante toestel;
+- bekende airlines, e-ink-liveries en vliegtuigtypes uit JSON-catalogi;
+- groot zijaanzicht, aangepast aan toesteltype, motoren en vliegrichting;
+- lokale routecatalogus met `Route onbekend` als veilige fallback;
+- één bestemmingsvlag en een bestemmingslandmark wanneer bekend;
+- SQLite-historie en dagstatistieken;
+- JSON-cache voor route- en metadataresultaten;
+- PNG-preview voor ontwikkeling;
+- configureerbare Waveshare-driver voor het 7.5-inch 800×480-scherm;
+- automatische herstart via systemd;
+- installer voor Raspberry Pi OS;
+- pytest-tests en GitHub Actions.
 
-Herkomst en bestemming zitten niet betrouwbaar in gratis ADS-B-data. Hiervoor volgt later een lokale routecache met een duidelijke `Route onbekend`-fallback.
-
-## Installeren
+## Lokaal testen
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+# pas HOME_LAT en HOME_LON aan
+python main.py --once --preview
 ```
 
-Vul je eigen coördinaten in en start:
+De preview staat in `output/flightink.png`.
+
+## Raspberry Pi installeren
 
 ```bash
-set -a
-source .env
-set +a
-python main.py
+git clone https://github.com/Destraat/FlightInk.git
+cd FlightInk
+chmod +x scripts/install_pi.sh
+./scripts/install_pi.sh
+sudo nano /opt/flightink/.env
 ```
 
-Windows PowerShell:
+Zet daarna:
 
-```powershell
-$env:HOME_LAT="52.0000"
-$env:HOME_LON="6.0000"
-$env:RADIUS_NM="10"
-python main.py
+```env
+DISPLAY_BACKEND=waveshare
+WAVESHARE_MODULE=waveshare_epd.epd7in5_V2
 ```
+
+Test eerst met:
+
+```bash
+/opt/flightink/.venv/bin/python /opt/flightink/main.py --once --preview
+```
+
+Start vervolgens de service:
+
+```bash
+sudo systemctl start flightink
+sudo systemctl status flightink
+journalctl -u flightink -f
+```
+
+## Belangrijke beperking
+
+Herkomst en bestemming zitten niet betrouwbaar in gratis ADS-B-data. `data/routes.json` is daarom bewust lokaal en uitbreidbaar. Ontbrekende routes worden niet verzonnen: het scherm toont dan `Route onbekend`.
 
 ## Structuur
 
 ```text
 FlightInk/
-├── assets/flightink-preview.svg
-├── flightink/
-│   ├── __init__.py
-│   ├── api.py
-│   ├── config.py
-│   ├── models.py
-│   └── renderer.py
+├── data/                  # airlines, vliegtuigtypes, routes, bestemmingen
+├── deploy/                # systemd-service
+├── flightink/             # API, modellen, renderer, display, opslag en routes
+├── scripts/install_pi.sh
+├── tests/
+├── .github/workflows/test.yml
+├── .env.example
 ├── AGENTS.md
-├── main.py
-├── requirements.txt
-└── .env.example
+└── main.py
 ```
-
-## E-inkhardware
-
-De MVP rendert eerst naar een normale monochrome PNG. Voeg daarna een aparte adapter toe voor het exacte Waveshare-model. De API-, selectie- en renderlogica mogen niet rechtstreeks afhankelijk worden van een hardwaredriver.
-
-Gebruik een verversinterval van ongeveer 30–60 seconden en voer periodiek een volledige refresh uit om ghosting te beperken.

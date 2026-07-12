@@ -5,8 +5,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .catalog import airline_livery
+from .catalog import aircraft_definition, airline_livery
 from .models import Aircraft, Weather, aircraft_name
+from .routes import Route
 
 
 def render_dashboard(
@@ -14,24 +15,29 @@ def render_dashboard(
     weather: Weather | None,
     output_path: str,
     size: tuple[int, int] = (800, 480),
+    route: Route | None = None,
+    stats: dict[str, int] | None = None,
 ) -> Path:
     image = Image.new("L", size, 255)
     draw = ImageDraw.Draw(image)
     fonts = _fonts()
+    route = route or Route()
+    stats = stats or {}
 
     draw.rectangle((8, 8, size[0] - 8, size[1] - 8), outline=25, width=3)
-    draw.text((28, 24), "FLIGHTINK", font=fonts["small_bold"], fill=20)
-    draw.text((28, 52), "LIVE BOVEN ONS HUIS", font=fonts["title"], fill=10)
-    draw.line((28, 92, size[0] - 28, 92), fill=65, width=2)
+    draw.text((28, 22), "FLIGHTINK", font=fonts["small_bold"], fill=20)
+    draw.text((28, 49), "LIVE BOVEN ONS HUIS", font=fonts["title"], fill=10)
+    draw.line((28, 91, size[0] - 28, 91), fill=65, width=2)
 
     if aircraft is None:
-        draw.text((215, 205), "Geen vliegtuig in de buurt", font=fonts["heading"], fill=25)
+        draw.text((190, 185), "Geen vliegtuig in de buurt", font=fonts["heading"], fill=25)
+        draw.text((235, 225), "Het scherm blijft automatisch zoeken", font=fonts["body"], fill=65)
     else:
-        _draw_aircraft(draw, aircraft, box=(45, 120, 545, 335), fonts=fonts)
-        _draw_details(draw, aircraft, fonts, x=575, y=118)
+        _draw_aircraft(draw, aircraft, weather, box=(35, 105, 545, 330), fonts=fonts)
+        _draw_details(draw, aircraft, route, fonts, x=565, y=108)
 
-    _draw_weather(draw, weather, fonts, x=28, y=382)
-    draw.text((610, 432), datetime.now().strftime("Bijgewerkt %H:%M"), font=fonts["small"], fill=55)
+    _draw_footer(draw, weather, stats, fonts, y=372)
+    draw.text((616, 438), datetime.now().strftime("Bijgewerkt %H:%M"), font=fonts["small"], fill=55)
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -39,130 +45,98 @@ def render_dashboard(
     return output
 
 
-def _draw_aircraft(
-    draw: ImageDraw.ImageDraw,
-    aircraft: Aircraft,
-    box: tuple[int, int, int, int],
-    fonts: dict[str, ImageFont.ImageFont],
-) -> None:
-    x1, y1, x2, y2 = box
+def _draw_aircraft(draw: ImageDraw.ImageDraw, aircraft: Aircraft, weather: Weather | None,
+                   box: tuple[int, int, int, int], fonts: dict[str, ImageFont.ImageFont]) -> None:
+    x1, _, x2, _ = box
     direction_right = aircraft.track is None or not (180 < aircraft.track < 360)
     livery = airline_livery(aircraft.airline_code)
-
-    for cx, cy, scale in [(105, 150, 1.0), (420, 165, 0.8), (280, 290, 0.7)]:
+    cloud_count = max(0, min(5, round((weather.cloud_cover or 0) / 20))) if weather else 0
+    clouds = [(85, 135, 1.0), (400, 145, .8), (245, 285, .7), (470, 275, .6), (145, 260, .6)]
+    for cx, cy, scale in clouds[:cloud_count]:
         _cloud(draw, cx, cy, scale)
 
-    length_scale = {"short": 0.82, "medium": 1.0, "long": 1.08, "extra_long": 1.15}.get(
-        str(__import__("flightink.catalog", fromlist=["aircraft_definition"]).aircraft_definition(aircraft.type_code).get("length_class", "medium")),
-        1.0,
-    )
-    center_x = (x1 + x2) // 2
-    half_length = int(225 * length_scale)
-    left = max(x1 + 10, center_x - half_length)
-    right = min(x2 - 10, center_x + half_length)
-    nose_x = right if direction_right else left
-    tail_x = left if direction_right else right
+    definition = aircraft_definition(aircraft.type_code)
+    scale = {"short": .82, "medium": 1.0, "long": 1.08, "extra_long": 1.15}.get(
+        str(definition.get("length_class", "medium")), 1.0)
+    center = (x1 + x2) // 2
+    half = int(220 * scale)
+    left, right = max(x1 + 8, center - half), min(x2 - 8, center + half)
+    nose, tail = (right, left) if direction_right else (left, right)
+    sign = 1 if direction_right else -1
 
-    body_top, body_bottom = 205, 250
-    body = [
-        (tail_x, body_top),
-        (nose_x - 50 if direction_right else nose_x + 50, body_top - 10),
-        (nose_x, 225),
-        (nose_x - 50 if direction_right else nose_x + 50, body_bottom),
-        (tail_x, body_bottom),
-    ]
+    body = [(tail, 202), (nose - 48 * sign, 192), (nose, 222), (nose - 48 * sign, 247), (tail, 247)]
     draw.polygon(body, fill=int(livery["body_gray"]), outline=20)
+    draw.polygon([(center, 222), (center + 120 * sign, 305), (center + 42 * sign, 300),
+                  (center - 35 * sign, 232)], fill=165, outline=25)
+    draw.polygon([(tail + 24 * sign, 208), (tail + 62 * sign, 132), (tail + 94 * sign, 208)],
+                 fill=int(livery["tail_gray"]), outline=25)
+    draw.line((tail + 10 * sign, 230, nose - 65 * sign, 230), fill=int(livery["stripe_gray"]), width=5)
 
-    wing_root = center_x
-    wing = [
-        (wing_root, 225),
-        (wing_root + (120 if direction_right else -120), 310),
-        (wing_root + (45 if direction_right else -45), 305),
-        (wing_root - (35 if direction_right else -35), 235),
-    ]
-    draw.polygon(wing, fill=165, outline=25)
-
-    tail = [
-        (tail_x + (25 if direction_right else -25), 210),
-        (tail_x + (65 if direction_right else -65), 135),
-        (tail_x + (95 if direction_right else -95), 210),
-    ]
-    draw.polygon(tail, fill=int(livery["tail_gray"]), outline=25)
-    draw.line(
-        (
-            tail_x + (10 if direction_right else -10),
-            232,
-            nose_x - (65 if direction_right else -65),
-            232,
-        ),
-        fill=int(livery["stripe_gray"]),
-        width=5,
-    )
-
-    window_count = 14 if aircraft.family == "widebody" else 11
-    step = 20 if direction_right else -20
-    start = tail_x + (105 if direction_right else -105)
-    for i in range(window_count):
+    count = 15 if aircraft.family == "widebody" else 11
+    start, step = tail + 105 * sign, 20 * sign
+    for i in range(count):
         wx = start + i * step
-        draw.ellipse((wx, 215, wx + 7, 222), fill=35)
+        draw.ellipse((wx, 213, wx + 7, 220), fill=35)
 
-    engine_gray = int(livery["engine_gray"])
-    engine_positions = [center_x + (20 if direction_right else -85)]
+    engine_positions = [center + 20 * sign]
     if aircraft.engine_count == 4:
-        engine_positions = [center_x - 75, center_x + 45]
-    for engine_x in engine_positions:
-        draw.ellipse((engine_x, 265, engine_x + 65, 292), fill=engine_gray, outline=25, width=2)
+        engine_positions = [center - 78, center + 45]
+    for ex in engine_positions:
+        draw.ellipse((ex, 262, ex + 65, 290), fill=int(livery["engine_gray"]), outline=25, width=2)
 
     marking = str(livery.get("marking") or aircraft.airline_code)
-    if marking:
-        text_x = center_x - min(95, len(marking) * 4)
-        draw.text((text_x, 180), marking, fill=30, font=fonts["small_bold"])
+    draw.text((center - min(100, len(marking) * 4), 176), marking, fill=30, font=fonts["small_bold"])
 
 
-def _draw_details(
-    draw: ImageDraw.ImageDraw,
-    aircraft: Aircraft,
-    fonts: dict[str, ImageFont.ImageFont],
-    x: int,
-    y: int,
-) -> None:
+def _draw_details(draw: ImageDraw.ImageDraw, aircraft: Aircraft, route: Route,
+                  fonts: dict[str, ImageFont.ImageFont], x: int, y: int) -> None:
     livery = airline_livery(aircraft.airline_code)
     draw.text((x, y), aircraft.callsign or aircraft.hex.upper(), font=fonts["heading"], fill=10)
-    draw.text((x, y + 38), str(livery.get("name", aircraft.airline_code)), font=fonts["small"], fill=55)
-    draw.text((x, y + 62), aircraft_name(aircraft.type_code), font=fonts["body"], fill=25)
-    draw.text((x, y + 92), aircraft.registration or "Registratie onbekend", font=fonts["small"], fill=55)
+    draw.text((x, y + 34), str(livery.get("name", aircraft.airline_code)), font=fonts["small"], fill=55)
+    draw.text((x, y + 57), aircraft_name(aircraft.type_code), font=fonts["body"], fill=25)
+    draw.text((x, y + 84), aircraft.registration or "Registratie onbekend", font=fonts["small"], fill=55)
+    draw.text((x, y + 112), route.label, font=fonts["small_bold"], fill=25)
+    if route.destination_country:
+        _draw_flag(draw, route.destination_country, x + 178, y + 108)
+    if route.landmark:
+        draw.text((x, y + 134), route.landmark, font=fonts["tiny"], fill=70)
 
-    altitude = f"{aircraft.altitude_ft:,.0f} ft" if aircraft.altitude_ft is not None else "onbekend"
-    speed = f"{aircraft.speed_knots * 1.852:,.0f} km/u" if aircraft.speed_knots is not None else "onbekend"
-    rows = [("AFSTAND", f"{aircraft.distance_km:.1f} km"), ("HOOGTE", altitude), ("SNELHEID", speed)]
-    yy = y + 135
+    rows = [
+        ("AFSTAND", f"{aircraft.distance_km:.1f} km"),
+        ("HOOGTE", f"{aircraft.altitude_m:,.0f} m" if aircraft.altitude_m is not None else "onbekend"),
+        ("SNELHEID", f"{aircraft.speed_kmh:,.0f} km/u" if aircraft.speed_kmh is not None else "onbekend"),
+    ]
+    yy = y + 160
     for label, value in rows:
         draw.text((x, yy), label, font=fonts["tiny"], fill=80)
-        draw.text((x, yy + 17), value, font=fonts["body_bold"], fill=20)
-        yy += 57
+        draw.text((x, yy + 15), value, font=fonts["body_bold"], fill=20)
+        yy += 48
 
 
-def _draw_weather(
-    draw: ImageDraw.ImageDraw,
-    weather: Weather | None,
-    fonts: dict[str, ImageFont.ImageFont],
-    x: int,
-    y: int,
-) -> None:
-    draw.line((x, y - 18, 772, y - 18), fill=100, width=1)
-    if weather is None:
-        text = "Actueel weer niet beschikbaar"
-    else:
-        temperature = f"{weather.temperature_c:.1f} °C" if weather.temperature_c is not None else "-- °C"
+def _draw_footer(draw: ImageDraw.ImageDraw, weather: Weather | None, stats: dict[str, int],
+                 fonts: dict[str, ImageFont.ImageFont], y: int) -> None:
+    draw.line((28, y - 14, 772, y - 14), fill=100, width=1)
+    if weather:
+        temp = f"{weather.temperature_c:.1f} °C" if weather.temperature_c is not None else "-- °C"
         clouds = f"{weather.cloud_cover}% bewolking" if weather.cloud_cover is not None else "bewolking onbekend"
-        text = f"WEER BOVEN HUIS   {temperature}   ·   {clouds}"
-    draw.text((x, y), text, font=fonts["body_bold"], fill=30)
+        wind = f"{weather.wind_speed_kmh:.0f} km/u wind" if weather.wind_speed_kmh is not None else ""
+        text = f"WEER   {temp} · {clouds}" + (f" · {wind}" if wind else "")
+    else:
+        text = "WEER   niet beschikbaar"
+    draw.text((28, y), text, font=fonts["body_bold"], fill=30)
+    draw.text((28, y + 34), f"VANDAAG   {stats.get('unique_aircraft', 0)} unieke toestellen · {stats.get('sightings', 0)} metingen",
+              font=fonts["small"], fill=55)
+
+
+def _draw_flag(draw: ImageDraw.ImageDraw, country: str, x: int, y: int) -> None:
+    # E-ink-friendly symbolic flag: country code in one single bordered badge.
+    draw.rectangle((x, y, x + 34, y + 20), outline=20, width=2)
+    draw.text((x + 5, y + 3), country[:2].upper(), font=_fonts()["tiny"], fill=20)
 
 
 def _cloud(draw: ImageDraw.ImageDraw, x: int, y: int, scale: float) -> None:
-    w = int(85 * scale)
-    h = int(28 * scale)
-    draw.arc((x, y, x + w, y + h), 180, 360, fill=190, width=2)
+    w, h = int(85 * scale), int(28 * scale)
+    draw.arc((x, y, x + w, y + h), 180, 360, fill=175, width=2)
 
 
 def _fonts() -> dict[str, ImageFont.ImageFont]:
@@ -175,13 +149,6 @@ def _fonts() -> dict[str, ImageFont.ImageFont]:
             if Path(path).exists():
                 return ImageFont.truetype(path, size)
         return ImageFont.load_default()
-
-    return {
-        "title": load(28, True),
-        "heading": load(24, True),
-        "body": load(17),
-        "body_bold": load(17, True),
-        "small": load(14),
-        "small_bold": load(14, True),
-        "tiny": load(11, True),
-    }
+    return {"title": load(28, True), "heading": load(23, True), "body": load(16),
+            "body_bold": load(16, True), "small": load(13), "small_bold": load(13, True),
+            "tiny": load(10, True)}

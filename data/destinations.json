@@ -1,0 +1,14 @@
+{
+  "AMS": {"city": "Amsterdam", "country": "NL", "landmark": "Westertoren"},
+  "CDG": {"city": "Parijs", "country": "FR", "landmark": "Eiffeltoren"},
+  "BCN": {"city": "Barcelona", "country": "ES", "landmark": "Sagrada Família"},
+  "LHR": {"city": "Londen", "country": "GB", "landmark": "Big Ben"},
+  "FRA": {"city": "Frankfurt", "country": "DE", "landmark": "Main Tower"},
+  "CPH": {"city": "Kopenhagen", "country": "DK", "landmark": "De Kleine Zeemeermin"},
+  "ARN": {"city": "Stockholm", "country": "SE", "landmark": "Stadhuis van Stockholm"},
+  "OSL": {"city": "Oslo", "country": "NO", "landmark": "Operahuis Oslo"},
+  "VIE": {"city": "Wenen", "country": "AT", "landmark": "Stephansdom"},
+  "ZRH": {"city": "Zürich", "country": "CH", "landmark": "Grossmünster"},
+  "LIS": {"city": "Lissabon", "country": "PT", "landmark": "Torre de Belém"},
+  "FCO": {"city": "Rome", "country": "IT", "landmark": "Colosseum"}
+}
