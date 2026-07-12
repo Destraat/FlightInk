@@ -23,6 +23,9 @@ class Settings:
     maximum_distance_km: float = 20.0
     selection_hold_seconds: int = 90
     request_timeout_seconds: int = 15
+    stale_aircraft_seconds: int = 900
+    stale_weather_seconds: int = 3600
+    prediction_horizon_seconds: int = 900
     airplanes_api_base: str = "https://api.airplanes.live/v2"
     weather_api_base: str = "https://api.open-meteo.com/v1/forecast"
 
@@ -51,6 +54,9 @@ class Settings:
             maximum_distance_km=float(os.getenv("MAXIMUM_DISTANCE_KM", "20")),
             selection_hold_seconds=int(os.getenv("SELECTION_HOLD_SECONDS", "90")),
             request_timeout_seconds=int(os.getenv("REQUEST_TIMEOUT_SECONDS", "15")),
+            stale_aircraft_seconds=int(os.getenv("STALE_AIRCRAFT_SECONDS", "900")),
+            stale_weather_seconds=int(os.getenv("STALE_WEATHER_SECONDS", "3600")),
+            prediction_horizon_seconds=int(os.getenv("PREDICTION_HORIZON_SECONDS", "900")),
         )
         settings.validate()
         return settings
@@ -64,5 +70,9 @@ class Settings:
             raise ValueError("RADIUS_NM moet groter dan 0 en maximaal 250 zijn")
         if self.refresh_seconds < 20:
             raise ValueError("REFRESH_SECONDS moet minimaal 20 zijn voor e-ink")
+        if self.maximum_distance_km <= 0:
+            raise ValueError("MAXIMUM_DISTANCE_KM moet groter dan 0 zijn")
+        if self.stale_aircraft_seconds < self.refresh_seconds:
+            raise ValueError("STALE_AIRCRAFT_SECONDS moet minimaal één refreshinterval zijn")
         if self.display_backend not in {"preview", "waveshare"}:
             raise ValueError("DISPLAY_BACKEND moet preview of waveshare zijn")

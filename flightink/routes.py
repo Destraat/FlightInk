@@ -13,13 +13,14 @@ ROUTES_FILE = ROOT / "data" / "routes.json"
 DESTINATIONS_FILE = ROOT / "data" / "destinations.json"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Route:
     origin: str | None = None
     destination: str | None = None
     destination_country: str | None = None
     landmark: str | None = None
     source: str = "unknown"
+    verified_at: str | None = None
 
     @property
     def label(self) -> str:
@@ -29,6 +30,12 @@ class Route:
 
 
 class RouteResolver:
+    """Resolve only exact callsigns from a local, user-maintained catalogue.
+
+    Broad prefix guesses are intentionally rejected because a flight-number range
+    does not reliably map to one destination. Cached exact entries remain valid.
+    """
+
     def __init__(self, storage: Storage) -> None:
         self.storage = storage
         self.routes = self._load_json(ROUTES_FILE)
@@ -39,33 +46,36 @@ class RouteResolver:
         if not normalized:
             return Route()
 
-        cached = self.storage.get_cache(f"route:{normalized}", 7 * 24 * 3600)
+        cached = self.storage.get_cache(f"route:{normalized}", 30 * 24 * 3600)
         if isinstance(cached, dict):
-            return Route(**cached)
+            try:
+                return Route(**cached)
+            except TypeError:
+                pass
 
         route_data = self.routes.get(normalized)
-        if not route_data:
-            route_data = self._match_prefix(normalized)
         if not isinstance(route_data, dict):
             return Route()
 
-        destination = route_data.get("destination")
-        destination_meta = self.destinations.get(destination, {}) if destination else {}
+        destination_code = route_data.get("destination_airport") or route_data.get("destination")
+        destination_meta = self.destinations.get(destination_code, {}) if destination_code else {}
         route = Route(
-            origin=route_data.get("origin"),
-            destination=destination,
+            origin=route_data.get("origin_airport") or route_data.get("origin"),
+            destination=destination_code,
             destination_country=destination_meta.get("country"),
             landmark=destination_meta.get("landmark"),
-            source="local_catalog",
+            source=str(route_data.get("source") or "local_exact"),
+            verified_at=route_data.get("verified_at"),
         )
-        self.storage.set_cache(f"route:{normalized}", route.__dict__)
+        self.storage.set_cache(f"route:{normalized}", {
+            "origin": route.origin,
+            "destination": route.destination,
+            "destination_country": route.destination_country,
+            "landmark": route.landmark,
+            "source": route.source,
+            "verified_at": route.verified_at,
+        })
         return route
-
-    def _match_prefix(self, callsign: str) -> dict[str, Any] | None:
-        for pattern, value in self.routes.items():
-            if pattern.endswith("*") and callsign.startswith(pattern[:-1]):
-                return value
-        return None
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:

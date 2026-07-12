@@ -5,13 +5,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/opt/flightink
-EnvironmentFile=/opt/flightink/.env
-ExecStart=/opt/flightink/.venv/bin/python /opt/flightink/main.py
+User=__FLIGHTINK_USER__
+WorkingDirectory=__FLIGHTINK_DIR__
+EnvironmentFile=__FLIGHTINK_DIR__/.env
+ExecStart=__FLIGHTINK_DIR__/.venv/bin/python __FLIGHTINK_DIR__/main.py
 Restart=always
 RestartSec=15
 Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
