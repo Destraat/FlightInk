@@ -4,9 +4,27 @@ import math
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from .config import Settings
 from .models import Aircraft, Weather
+
+
+def create_session() -> requests.Session:
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=0.8,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET"}),
+        respect_retry_after_header=True,
+    )
+    session = requests.Session()
+    session.headers.update({"User-Agent": "FlightInk/1.0 (+https://github.com/Destraat/FlightInk)"})
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -19,56 +37,77 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * radius * math.asin(math.sqrt(a))
 
 
-def fetch_aircraft(settings: Settings) -> list[Aircraft]:
+def fetch_aircraft(settings: Settings, session: requests.Session | None = None) -> list[Aircraft]:
+    client = session or create_session()
     url = f"{settings.airplanes_api_base}/point/{settings.home_lat}/{settings.home_lon}/{settings.radius_nm}"
-    response = requests.get(url, timeout=15, headers={"User-Agent": "FlightInk/0.1"})
+    response = client.get(url, timeout=settings.request_timeout_seconds)
     response.raise_for_status()
     payload: dict[str, Any] = response.json()
 
     result: list[Aircraft] = []
     for raw in payload.get("ac", []):
-        lat = raw.get("lat")
-        lon = raw.get("lon")
+        lat = _to_float(raw.get("lat"))
+        lon = _to_float(raw.get("lon"))
         if lat is None or lon is None:
             continue
-
+        distance = haversine_km(settings.home_lat, settings.home_lon, lat, lon)
+        altitude = _to_float(raw.get("alt_baro"))
+        if altitude is not None and altitude < settings.minimum_altitude_ft:
+            continue
+        if distance > settings.maximum_distance_km:
+            continue
         result.append(
             Aircraft(
-                hex=str(raw.get("hex", "")).strip(),
-                callsign=str(raw.get("flight", "")).strip(),
-                registration=str(raw.get("r", "")).strip(),
+                hex=str(raw.get("hex", "")).strip().lower(),
+                callsign=str(raw.get("flight", "")).strip().upper(),
+                registration=str(raw.get("r", "")).strip().upper(),
                 type_code=str(raw.get("t", "")).strip().upper(),
-                latitude=float(lat),
-                longitude=float(lon),
-                altitude_ft=_to_float(raw.get("alt_baro")),
+                latitude=lat,
+                longitude=lon,
+                altitude_ft=altitude,
                 speed_knots=_to_float(raw.get("gs")),
                 track=_to_float(raw.get("track")),
-                distance_km=haversine_km(settings.home_lat, settings.home_lon, float(lat), float(lon)),
+                distance_km=distance,
             )
         )
+    return sorted(result, key=_selection_score)
 
-    return sorted(result, key=lambda aircraft: aircraft.distance_km)
 
-
-def fetch_weather(settings: Settings) -> Weather:
+def fetch_weather(settings: Settings, session: requests.Session | None = None) -> Weather:
+    client = session or create_session()
     params = {
         "latitude": settings.home_lat,
         "longitude": settings.home_lon,
-        "current": "temperature_2m,cloud_cover,weather_code",
+        "current": "temperature_2m,cloud_cover,weather_code,wind_speed_10m,wind_direction_10m",
         "timezone": "auto",
     }
-    response = requests.get(settings.weather_api_base, params=params, timeout=15)
+    response = client.get(settings.weather_api_base, params=params, timeout=settings.request_timeout_seconds)
     response.raise_for_status()
     current = response.json().get("current", {})
     return Weather(
         temperature_c=_to_float(current.get("temperature_2m")),
-        cloud_cover=int(current["cloud_cover"]) if current.get("cloud_cover") is not None else None,
-        weather_code=int(current["weather_code"]) if current.get("weather_code") is not None else None,
+        cloud_cover=_to_int(current.get("cloud_cover")),
+        weather_code=_to_int(current.get("weather_code")),
+        wind_speed_kmh=_to_float(current.get("wind_speed_10m")),
+        wind_direction=_to_float(current.get("wind_direction_10m")),
     )
+
+
+def _selection_score(aircraft: Aircraft) -> tuple[float, float]:
+    # Distance dominates; aircraft with a callsign and type are preferred on ties.
+    completeness_penalty = 0.0 if aircraft.callsign and aircraft.type_code else 0.75
+    return aircraft.distance_km + completeness_penalty, -(aircraft.altitude_ft or 0.0)
 
 
 def _to_float(value: Any) -> float | None:
     try:
         return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(value: Any) -> int | None:
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None
