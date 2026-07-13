@@ -8,7 +8,7 @@ from dataclasses import asdict
 
 import requests
 
-from flightink.api import create_session, fetch_aircraft, fetch_weather
+from flightink.api import create_session, fetch_aircraft, fetch_local_aircraft, fetch_weather
 from flightink.config import Settings
 from flightink.display import Display, create_display
 from flightink.models import Aircraft, Weather
@@ -72,18 +72,18 @@ def run_once(settings: Settings, storage: Storage, resolver: RouteResolver, disp
 
     try:
         aircraft_list = fetch_aircraft(settings, session)
-        LOGGER.info("%s geschikte vliegtuigen gevonden", len(aircraft_list))
+        LOGGER.info("Found %s suitable aircraft", len(aircraft_list))
     except requests.ConnectionError:
         offline = True
-        LOGGER.exception("Geen netwerkverbinding voor vliegtuigdata")
+        LOGGER.exception("No network connection for aircraft data")
     except Exception:
         aircraft_error = True
-        LOGGER.exception("Vliegtuigdata ophalen mislukt")
+        LOGGER.exception("Aircraft data retrieval failed")
 
     try:
         weather = fetch_weather(settings, session)
     except Exception:
-        LOGGER.exception("Weerdata ophalen mislukt")
+        LOGGER.exception("Weather data retrieval failed")
         weather = _cached_weather(storage, settings.stale_weather_seconds)
 
     selected, prediction = _select_aircraft(aircraft_list, settings)
@@ -118,14 +118,30 @@ def run_once(settings: Settings, storage: Storage, resolver: RouteResolver, disp
         stale_minutes=stale_minutes,
     )
     changed = display.show(output)
-    LOGGER.info("Scherm %s: %s", "bijgewerkt" if changed else "ongewijzigd", output)
+    LOGGER.info("Display %s: %s", "updated" if changed else "unchanged", output)
+
+
+def _run_adsb_test(settings: Settings, session: requests.Session) -> None:
+    LOGGER.info("Testing local ADS-B endpoint: %s", settings.local_adsb_url)
+    aircraft = fetch_local_aircraft(settings, session)
+    LOGGER.info("Local receiver returned %s usable aircraft", len(aircraft))
+    for item in aircraft[:10]:
+        LOGGER.info(
+            "%s %s %s · %.1f km · %s ft",
+            item.callsign or item.hex,
+            item.registration or "registration unknown",
+            item.type_code or "type unknown",
+            item.distance_km,
+            f"{item.altitude_ft:.0f}" if item.altitude_ft is not None else "unknown",
+        )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="FlightInk e-ink flight display")
-    parser.add_argument("--once", action="store_true", help="Render één keer en stop")
-    parser.add_argument("--preview", action="store_true", help="Forceer PNG-preview zonder hardware")
-    parser.add_argument("--display-test", action="store_true", help="Toon een diagnostisch testbeeld")
+    parser.add_argument("--once", action="store_true", help="Render once and stop")
+    parser.add_argument("--preview", action="store_true", help="Force PNG preview without hardware")
+    parser.add_argument("--display-test", action="store_true", help="Show a diagnostic display image")
+    parser.add_argument("--adsb-test", action="store_true", help="Test the local RTL-SDR/dump1090/readsb feed")
     args = parser.parse_args()
 
     settings = Settings.from_env()
@@ -141,7 +157,10 @@ def main() -> None:
     try:
         if args.display_test:
             output = display.test()
-            LOGGER.info("Displaytest geschreven/getoond: %s", output)
+            LOGGER.info("Display test written/shown: %s", output)
+            return
+        if args.adsb_test:
+            _run_adsb_test(settings, session)
             return
         while not _STOP:
             started = time.monotonic()
