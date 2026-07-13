@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any
 
@@ -9,6 +10,8 @@ from urllib3.util.retry import Retry
 
 from .config import Settings
 from .models import Aircraft, Weather
+
+LOGGER = logging.getLogger(__name__)
 
 
 def create_session() -> requests.Session:
@@ -24,6 +27,7 @@ def create_session() -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": "FlightInk/1.0 (+https://github.com/Destraat/FlightInk)"})
     session.mount("https://", HTTPAdapter(max_retries=retry))
+    session.mount("http://", HTTPAdapter(max_retries=Retry(total=0)))
     return session
 
 
@@ -38,35 +42,78 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def fetch_aircraft(settings: Settings, session: requests.Session | None = None) -> list[Aircraft]:
+    """Fetch aircraft from a local USB ADS-B receiver, the internet, or both.
+
+    `local` reads dump1090/readsb JSON generated from an RTL-SDR USB dongle.
+    `remote` uses Airplanes.live.
+    `hybrid` prefers the local receiver and falls back to Airplanes.live when
+    the local feed is unavailable or contains no usable aircraft.
+    """
+    client = session or create_session()
+    if settings.aircraft_source in {"local", "hybrid"}:
+        try:
+            local = fetch_local_aircraft(settings, client)
+            if local or settings.aircraft_source == "local":
+                LOGGER.info("Using local ADS-B receiver: %s aircraft", len(local))
+                return local
+            LOGGER.info("Local ADS-B receiver returned no usable aircraft; using remote fallback")
+        except (requests.RequestException, ValueError, TypeError):
+            if settings.aircraft_source == "local":
+                raise
+            LOGGER.warning("Local ADS-B receiver unavailable; using remote fallback", exc_info=True)
+
+    return fetch_remote_aircraft(settings, client)
+
+
+def fetch_local_aircraft(settings: Settings, session: requests.Session | None = None) -> list[Aircraft]:
+    client = session or create_session()
+    response = client.get(settings.local_adsb_url, timeout=settings.local_adsb_timeout_seconds)
+    response.raise_for_status()
+    payload = response.json()
+    raw_aircraft = payload.get("aircraft", payload.get("ac", []))
+    if not isinstance(raw_aircraft, list):
+        raise ValueError("Local ADS-B response does not contain an aircraft list")
+    return _parse_aircraft(raw_aircraft, settings)
+
+
+def fetch_remote_aircraft(settings: Settings, session: requests.Session | None = None) -> list[Aircraft]:
     client = session or create_session()
     url = f"{settings.airplanes_api_base}/point/{settings.home_lat}/{settings.home_lon}/{settings.radius_nm}"
     response = client.get(url, timeout=settings.request_timeout_seconds)
     response.raise_for_status()
     payload: dict[str, Any] = response.json()
+    raw_aircraft = payload.get("ac", [])
+    if not isinstance(raw_aircraft, list):
+        raise ValueError("Remote ADS-B response does not contain an aircraft list")
+    return _parse_aircraft(raw_aircraft, settings)
 
+
+def _parse_aircraft(raw_aircraft: list[dict[str, Any]], settings: Settings) -> list[Aircraft]:
     result: list[Aircraft] = []
-    for raw in payload.get("ac", []):
+    for raw in raw_aircraft:
+        if not isinstance(raw, dict):
+            continue
         lat = _to_float(raw.get("lat"))
         lon = _to_float(raw.get("lon"))
         if lat is None or lon is None:
             continue
         distance = haversine_km(settings.home_lat, settings.home_lon, lat, lon)
-        altitude = _to_float(raw.get("alt_baro"))
+        altitude = _altitude(raw)
         if altitude is not None and altitude < settings.minimum_altitude_ft:
             continue
         if distance > settings.maximum_distance_km:
             continue
         result.append(
             Aircraft(
-                hex=str(raw.get("hex", "")).strip().lower(),
-                callsign=str(raw.get("flight", "")).strip().upper(),
-                registration=str(raw.get("r", "")).strip().upper(),
-                type_code=str(raw.get("t", "")).strip().upper(),
+                hex=str(raw.get("hex", raw.get("icao", ""))).strip().lower(),
+                callsign=str(raw.get("flight", raw.get("callsign", ""))).strip().upper(),
+                registration=str(raw.get("r", raw.get("registration", ""))).strip().upper(),
+                type_code=str(raw.get("t", raw.get("type", ""))).strip().upper(),
                 latitude=lat,
                 longitude=lon,
                 altitude_ft=altitude,
-                speed_knots=_to_float(raw.get("gs")),
-                track=_to_float(raw.get("track")),
+                speed_knots=_to_float(raw.get("gs", raw.get("speed"))),
+                track=_to_float(raw.get("track", raw.get("heading"))),
                 distance_km=distance,
             )
         )
@@ -93,8 +140,14 @@ def fetch_weather(settings: Settings, session: requests.Session | None = None) -
     )
 
 
+def _altitude(raw: dict[str, Any]) -> float | None:
+    value = raw.get("alt_baro", raw.get("alt_geom", raw.get("altitude")))
+    if isinstance(value, str) and value.lower() == "ground":
+        return 0.0
+    return _to_float(value)
+
+
 def _selection_score(aircraft: Aircraft) -> tuple[float, float]:
-    # Distance dominates; aircraft with a callsign and type are preferred on ties.
     completeness_penalty = 0.0 if aircraft.callsign and aircraft.type_code else 0.75
     return aircraft.distance_km + completeness_penalty, -(aircraft.altitude_ft or 0.0)
 
