@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">FlightInk final e-ink display preview</title>
+  <desc id="desc">A monochrome aircraft display showing a KLM Boeing 737 flying toward Stockholm.</desc>
+  <rect width="1200" height="720" fill="#f1f1ec"/>
+  <rect x="18" y="18" width="1164" height="684" rx="6" fill="#fff" stroke="#111" stroke-width="5"/>
+  <text x="55" y="66" font-family="DejaVu Sans,Arial,sans-serif" font-size="24" font-weight="700" letter-spacing="2">FLIGHTINK</text>
+  <text x="55" y="112" font-family="DejaVu Sans,Arial,sans-serif" font-size="39" font-weight="700">LIVE BOVEN ONS HUIS</text>
+  <line x1="55" y1="137" x2="1145" y2="137" stroke="#333" stroke-width="2"/>
+  <g fill="none" stroke="#aaa" stroke-width="3">
+    <path d="M85 205 C110 177 148 177 170 204 C193 179 235 184 246 216"/>
+    <path d="M355 180 C377 155 409 158 426 180 C446 158 478 163 491 190"/>
+    <path d="M585 224 C607 197 642 199 658 223 C678 203 710 207 724 233"/>
+  </g>
+  <g transform="translate(62 148)">
+    <path d="M38 203 L516 199 Q581 188 661 159 Q717 139 780 157 Q803 165 821 181 Q795 209 741 220 Q652 239 516 241 L38 241 Z" fill="#eee" stroke="#111" stroke-width="5"/>
+    <path d="M120 202 L163 77 L214 79 L266 202 Z" fill="#222" stroke="#111" stroke-width="5"/>
+    <path d="M366 226 L576 348 L673 339 L512 220 Z" fill="#ccc" stroke="#111" stroke-width="5"/>
+    <path d="M438 222 L580 133 L631 138 L515 225 Z" fill="#ddd" stroke="#111" stroke-width="4"/>
+    <ellipse cx="502" cy="278" rx="55" ry="29" fill="#bbb" stroke="#111" stroke-width="4"/>
+    <ellipse cx="622" cy="270" rx="52" ry="27" fill="#bbb" stroke="#111" stroke-width="4"/>
+    <path d="M58 226 L727 217" stroke="#555" stroke-width="7"/>
+    <g fill="#111">
+      <ellipse cx="269" cy="211" rx="5" ry="4"/><ellipse cx="292" cy="210" rx="5" ry="4"/><ellipse cx="315" cy="210" rx="5" ry="4"/><ellipse cx="338" cy="209" rx="5" ry="4"/><ellipse cx="361" cy="209" rx="5" ry="4"/><ellipse cx="384" cy="208" rx="5" ry="4"/><ellipse cx="407" cy="208" rx="5" ry="4"/><ellipse cx="430" cy="207" rx="5" ry="4"/><ellipse cx="453" cy="207" rx="5" ry="4"/><ellipse cx="476" cy="206" rx="5" ry="4"/><ellipse cx="499" cy="206" rx="5" ry="4"/><ellipse cx="522" cy="204" rx="5" ry="4"/>
+    </g>
+    <text x="302" y="190" font-family="DejaVu Sans,Arial,sans-serif" font-size="34" font-weight="700">KLM</text>
+  </g>
+  <line x1="835" y1="160" x2="835" y2="562" stroke="#bbb" stroke-width="2"/>
+  <text x="870" y="190" font-family="DejaVu Sans,Arial,sans-serif" font-size="42" font-weight="700">KLM1287</text>
+  <text x="870" y="224" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" fill="#555">KLM Royal Dutch Airlines</text>
+  <text x="870" y="257" font-family="DejaVu Sans,Arial,sans-serif" font-size="24" font-weight="600">Boeing 737-800</text>
+  <text x="870" y="287" font-family="DejaVu Sans,Arial,sans-serif" font-size="18" fill="#666">PH-BXK</text>
+  <text x="870" y="337" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="700" fill="#555">ROUTE</text>
+  <text x="870" y="372" font-family="DejaVu Sans,Arial,sans-serif" font-size="26" font-weight="700">Amsterdam → Stockholm</text>
+  <text x="870" y="402" font-family="DejaVu Sans,Arial,sans-serif" font-size="18" fill="#555">Stockholm · Sweden</text>
+  <text x="870" y="451" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="700" fill="#666">EXPECTED PASSAGE</text>
+  <text x="870" y="480" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700">in 42 sec · 0.8 km</text>
+  <g font-family="DejaVu Sans,Arial,sans-serif">
+    <text x="870" y="527" font-size="15" font-weight="700" fill="#777">DISTANCE NOW</text><text x="1045" y="527" font-size="21" font-weight="700">3.1 km</text>
+    <text x="870" y="563" font-size="15" font-weight="700" fill="#777">ALTITUDE</text><text x="1045" y="563" font-size="21" font-weight="700">10,850 ft</text>
+    <text x="870" y="599" font-size="15" font-weight="700" fill="#777">SPEED</text><text x="1045" y="599" font-size="21" font-weight="700">812 km/h</text>
+  </g>
+  <line x1="55" y1="607" x2="1145" y2="607" stroke="#555" stroke-width="2"/>
+  <text x="55" y="645" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700">WEATHER   18.4 °C · 64% CLOUD COVER</text>
+  <text x="55" y="678" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" fill="#555">18 passages today</text>
+  <text x="966" y="678" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" fill="#555">Updated 14:32</text>
+</svg>
