@@ -5,8 +5,6 @@ APP_DIR=${FLIGHTINK_DIR:-/opt/flightink}
 REPO_URL=https://github.com/Destraat/FlightInk.git
 INSTALL_USER=${SUDO_USER:-$USER}
 INSTALL_GROUP=$(id -gn "$INSTALL_USER")
-SERVICE_TEMPLATE="$APP_DIR/deploy/flightink.service"
-SERVICE_TARGET=/etc/systemd/system/flightink.service
 
 sudo apt-get update
 sudo apt-get install -y git python3 python3-venv python3-pip python3-pil python3-numpy fonts-dejavu-core
@@ -27,15 +25,21 @@ if [ ! -f "$APP_DIR/.env" ]; then
   echo "Pas eerst $APP_DIR/.env aan met je eigen coördinaten."
 fi
 
-sed \
-  -e "s|__FLIGHTINK_USER__|$INSTALL_USER|g" \
-  -e "s|__FLIGHTINK_DIR__|$APP_DIR|g" \
-  "$SERVICE_TEMPLATE" | sudo tee "$SERVICE_TARGET" >/dev/null
+install_service() {
+  local template=$1
+  local target=$2
+  sed -e "s|__FLIGHTINK_USER__|$INSTALL_USER|g" -e "s|__FLIGHTINK_DIR__|$APP_DIR|g" "$template" | sudo tee "$target" >/dev/null
+}
+
+install_service "$APP_DIR/deploy/flightink.service" /etc/systemd/system/flightink.service
+install_service "$APP_DIR/deploy/flightink-admin.service" /etc/systemd/system/flightink-admin.service
 
 sudo systemctl daemon-reload
-sudo systemctl enable flightink.service
+sudo systemctl enable flightink.service flightink-admin.service
 
+HOST_IP=$(hostname -I | awk '{print $1}')
 echo "Installatie klaar voor gebruiker $INSTALL_USER."
 echo "Previewtest: $APP_DIR/.venv/bin/python $APP_DIR/main.py --once --preview"
 echo "Hardwaretest: $APP_DIR/.venv/bin/python $APP_DIR/main.py --display-test"
-echo "Start daarna met: sudo systemctl start flightink"
+echo "Start: sudo systemctl start flightink flightink-admin"
+echo "Beheerpagina: http://${HOST_IP:-flightink.local}:8080"
