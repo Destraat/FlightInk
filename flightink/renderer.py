@@ -6,6 +6,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
+from .aircraft_shapes import ShapeContext, draw_aircraft_shape
 from .catalog import aircraft_definition, airline_livery
 from .models import Aircraft, Weather, aircraft_name
 from .prediction import PassagePrediction
@@ -56,22 +57,18 @@ def _draw_aircraft(draw: ImageDraw.ImageDraw, aircraft: Aircraft, box: tuple[int
     center = (x1 + x2) // 2
     half = int(215 * scale)
     left, right = max(x1 + 8, center - half), min(x2 - 8, center + half)
-    nose, tail = (right, left) if rightward else (left, right)
-    body = [(tail,185),(nose-52 if rightward else nose+52,175),(nose,208),(nose-52 if rightward else nose+52,232),(tail,232)]
-    draw.polygon(body, fill=int(livery["body_gray"]), outline=20)
-    wing = [(center,210),(center+(115 if rightward else -115),300),(center+(42 if rightward else -42),292),(center-(32 if rightward else -32),220)]
-    draw.polygon(wing, fill=160, outline=25)
-    tail_shape = [(tail+(22 if rightward else -22),194),(tail+(62 if rightward else -62),120),(tail+(92 if rightward else -92),194)]
-    draw.polygon(tail_shape, fill=int(livery["tail_gray"]), outline=25)
-    draw.line((tail+(10 if rightward else -10),217,nose-(62 if rightward else -62),217), fill=int(livery["stripe_gray"]), width=5)
-    for i in range(15 if aircraft.family == "widebody" else 11):
-        wx = tail + (100 if rightward else -100) + i * (20 if rightward else -20)
-        draw.ellipse((wx,199,wx+6,205), fill=30)
-    engines = [center+(10 if rightward else -70)] if aircraft.engine_count != 4 else [center-82,center+35]
-    for ex in engines:
-        draw.ellipse((ex,247,ex+62,276), fill=int(livery["engine_gray"]), outline=25, width=2)
+    ctx = ShapeContext(left=left, right=right, center=center, baseline=208, direction=1 if rightward else -1, body_gray=int(livery["body_gray"]), tail_gray=int(livery["tail_gray"]), engine_gray=int(livery["engine_gray"]))
+    draw_aircraft_shape(draw, aircraft.family, aircraft.type_code, ctx)
+    draw.line((left+15,217,right-60,217), fill=int(livery["stripe_gray"]), width=4)
+    windows = 16 if aircraft.family == "widebody" else 10
+    for i in range(windows):
+        wx = left + 92 + i * max(14, (right-left-170)//max(1, windows-1))
+        if not rightward:
+            wx = left + right - wx
+        draw.ellipse((wx,196,wx+5,201), fill=30)
     marking = str(livery.get("marking") or aircraft.airline_code)
-    draw.text((center-min(95,len(marking)*4),162), marking, fill=25, font=fonts["small_bold"])
+    if marking:
+        draw.text((center-min(95,len(marking)*4),160), marking, fill=25, font=fonts["small_bold"])
 
 
 def _draw_details(draw: ImageDraw.ImageDraw, aircraft: Aircraft, fonts: dict[str, ImageFont.ImageFont], x: int, y: int, route: Any | None, prediction: PassagePrediction | None) -> None:
