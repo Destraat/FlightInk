@@ -1,0 +1,18 @@
+[Unit]
+Description=FlightInk local admin dashboard
+After=network-online.target flightink.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__FLIGHTINK_USER__
+WorkingDirectory=__FLIGHTINK_DIR__
+EnvironmentFile=__FLIGHTINK_DIR__/.env
+ExecStart=__FLIGHTINK_DIR__/.venv/bin/python -m flightink.admin
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
