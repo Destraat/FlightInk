@@ -1,6 +1,6 @@
 # FlightInk
 
-![Final FlightInk e-ink display preview](assets/flightink-final-preview.svg)
+![assets/Flightink.png)
 
 FlightInk is a local, open-source e-ink flight display for aircraft passing near your home. It selects the aircraft most likely to pass closest to your configured location, predicts the closest point of approach, renders a recognizable aircraft silhouette and airline livery, and shows the result on a Waveshare 7.5-inch 800×480 black-and-white e-paper display.
 
