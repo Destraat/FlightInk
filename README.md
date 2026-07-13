@@ -6,46 +6,113 @@
 
 FlightInk is a local, open-source e-ink flight display for aircraft passing near your home. It selects the aircraft most likely to pass closest to your configured location, predicts the closest point of approach, renders a recognizable aircraft silhouette and airline livery, and shows the result on a Waveshare 7.5-inch 800×480 black-and-white e-paper display.
 
-The core application uses free data sources and performs all rendering and storage locally.
+FlightInk can use either free internet ADS-B data, your own RTL-SDR USB receiver and 1090 MHz antenna, or a hybrid setup that prefers your own receiver and falls back to the internet.
 
 ## Features
 
-- Live ADS-B aircraft positions from Airplanes.live.
+- Local aircraft reception through an RTL-SDR USB dongle, 1090 MHz antenna, and dump1090/readsb.
+- Free remote ADS-B fallback through Airplanes.live.
 - Current temperature, cloud cover, wind speed, and wind direction from Open-Meteo.
 - Predicted closest point of approach instead of selecting only by current distance.
-- Configurable search radius, minimum altitude, maximum distance, and prediction horizon.
 - Recognizable silhouettes for narrow-body aircraft, regional jets, wide-bodies, Boeing 747s, Airbus A380s, turboprops, and business jets.
 - Airline liveries and aircraft metadata from local JSON catalogs.
-- Exact local route mappings with a safe `Route unknown` fallback.
 - SQLite passage history and daily statistics.
 - Cached fallback data during temporary network or API failures.
 - Duplicate-frame detection to avoid unnecessary e-paper refreshes.
-- Clear live, offline, stale-data, source-error, and no-aircraft display states.
-- PNG preview mode for development.
-- Configurable Waveshare display adapter.
-- Hardware test mode for validating the display before running live data.
+- PNG preview mode, physical display test, and local ADS-B receiver test.
 - Local administration dashboard on port `8080`.
-- systemd services for both the display and the administration dashboard.
-- Automated tests on Python 3.11 and 3.12 through GitHub Actions.
+- systemd services and automated tests on Python 3.11 and 3.12.
 
 ## Hardware
 
-The reference build uses:
+### Required
 
 - Raspberry Pi Zero 2 W with GPIO headers;
-- Waveshare 7.5-inch black-and-white e-Paper HAT;
-- 800×480 resolution;
+- Waveshare 7.5-inch black-and-white 800×480 e-Paper HAT;
 - microSD card;
 - 5 V micro-USB power supply;
-- the supplied Waveshare ribbon cable and driver board.
+- supplied Waveshare driver board and ribbon cable.
 
-The default driver module is:
+### Optional but recommended: your own ADS-B receiver
 
-```env
-WAVESHARE_MODULE=waveshare_epd.epd7in5_V2
+To receive aircraft directly instead of relying only on internet data, add:
+
+- an RTL-SDR USB dongle suitable for 1090 MHz ADS-B;
+- a 1090 MHz ADS-B antenna;
+- a USB OTG adapter or powered USB hub for the Raspberry Pi Zero 2 W;
+- dump1090, dump1090-fa, dump1090-mutability, or readsb.
+
+The USB receiver does not connect directly to FlightInk. Decoder software reads the radio signals and exposes aircraft as JSON. FlightInk reads that JSON endpoint.
+
+Typical data flow:
+
+```text
+Aircraft transponder
+        ↓ 1090 MHz
+ADS-B antenna
+        ↓
+RTL-SDR USB dongle
+        ↓ USB
+Raspberry Pi + dump1090/readsb
+        ↓ local JSON
+FlightInk
+        ↓ SPI
+Waveshare e-paper display
 ```
 
-Waveshare has produced multiple revisions. Confirm the module name for the exact revision printed on your panel or driver board.
+The default local endpoint is:
+
+```text
+http://127.0.0.1:8080/data/aircraft.json
+```
+
+This is the common dump1090/readsb `aircraft.json` format. Change `LOCAL_ADSB_URL` when your decoder exposes another path or runs on another device.
+
+## Aircraft source modes
+
+Configure the source in `.env`:
+
+```env
+# Prefer your own USB receiver and use Airplanes.live as fallback
+AIRCRAFT_SOURCE=hybrid
+LOCAL_ADSB_URL=http://127.0.0.1:8080/data/aircraft.json
+LOCAL_ADSB_TIMEOUT_SECONDS=3
+```
+
+Supported modes:
+
+| Mode | Behaviour |
+|---|---|
+| `local` | Use only the local RTL-SDR/dump1090/readsb receiver. |
+| `remote` | Use only Airplanes.live. No USB receiver is required. |
+| `hybrid` | Prefer the local receiver and fall back to Airplanes.live. |
+
+`hybrid` is the recommended mode. It keeps the project useful when the antenna or decoder is unavailable, while preferring aircraft received at your own location.
+
+## Test the USB receiver
+
+First verify that the decoder endpoint responds:
+
+```bash
+curl http://127.0.0.1:8080/data/aircraft.json
+```
+
+Then run FlightInk's diagnostic:
+
+```bash
+python main.py --adsb-test
+```
+
+The command prints the first usable locally received aircraft, including callsign, registration, type, distance, and altitude.
+
+When no aircraft are visible, confirm that:
+
+- the RTL-SDR dongle is detected with `lsusb`;
+- dump1090/readsb is running;
+- the antenna is connected and placed near a window or outdoors;
+- the configured JSON URL opens locally;
+- aircraft are within reception range;
+- `MINIMUM_ALTITUDE_FT` and `MAXIMUM_DISTANCE_KM` are not filtering everything.
 
 ## Local development
 
@@ -56,11 +123,12 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set your own coordinates in `.env`:
+Set your coordinates and choose a source:
 
 ```env
 HOME_LAT=52.0000
 HOME_LON=6.0000
+AIRCRAFT_SOURCE=remote
 DISPLAY_BACKEND=preview
 ```
 
@@ -68,12 +136,6 @@ Generate one preview frame:
 
 ```bash
 python main.py --once --preview
-```
-
-The generated image is written to:
-
-```text
-output/flightink.png
 ```
 
 Run the tests:
@@ -90,13 +152,6 @@ git clone https://github.com/Destraat/FlightInk.git
 cd FlightInk
 chmod +x scripts/install_pi.sh
 ./scripts/install_pi.sh
-```
-
-The installer places the application in `/opt/flightink`, creates a virtual environment, installs the dependencies, and configures the systemd services for the detected Linux user.
-
-Edit the configuration:
-
-```bash
 sudo nano /opt/flightink/.env
 ```
 
@@ -105,77 +160,39 @@ At minimum, set:
 ```env
 HOME_LAT=your_latitude
 HOME_LON=your_longitude
+AIRCRAFT_SOURCE=hybrid
+LOCAL_ADSB_URL=http://127.0.0.1:8080/data/aircraft.json
 DISPLAY_BACKEND=waveshare
 WAVESHARE_MODULE=waveshare_epd.epd7in5_V2
 ```
 
-## Test before enabling the live service
-
-Create a normal PNG preview:
+Test before starting the service:
 
 ```bash
+/opt/flightink/.venv/bin/python /opt/flightink/main.py --adsb-test
 /opt/flightink/.venv/bin/python /opt/flightink/main.py --once --preview
-```
-
-Run the physical display test:
-
-```bash
 /opt/flightink/.venv/bin/python /opt/flightink/main.py --display-test
 ```
 
-The display test verifies the screen dimensions, solid black and white areas, line rendering, and basic text output.
-
-## Start the services
+Start the services:
 
 ```bash
-sudo systemctl start flightink
-sudo systemctl start flightink-admin
+sudo systemctl start flightink flightink-admin
 sudo systemctl status flightink
-sudo systemctl status flightink-admin
-```
-
-Follow the live application log:
-
-```bash
 journalctl -u flightink -f
 ```
 
 ## Administration dashboard
 
-The local administration dashboard provides:
-
-- current service status;
-- live preview image;
-- editable coordinates and runtime settings;
-- display backend selection;
-- preview and display-test actions;
-- start, stop, and restart controls;
-- recent aircraft passages;
-- a local health endpoint.
-
-Open it from another device on the same local network:
+Open the local dashboard from another device on the same network:
 
 ```text
 http://flightink.local:8080
 ```
 
-When mDNS is unavailable, use the Raspberry Pi address:
-
-```bash
-hostname -I
-```
-
-Then open, for example:
-
-```text
-http://192.168.1.50:8080
-```
-
-The dashboard is intended only for a trusted local network. Do not expose port `8080` directly to the public internet.
+When mDNS is unavailable, run `hostname -I` and use the Raspberry Pi IP address. Do not expose port `8080` directly to the public internet.
 
 ## Configuration
-
-Important environment variables include:
 
 ```env
 HOME_LAT=52.5600
@@ -184,11 +201,15 @@ RADIUS_NM=10
 REFRESH_SECONDS=60
 MAXIMUM_DISTANCE_KM=20
 MINIMUM_ALTITUDE_FT=500
-SELECTION_HOLD_SECONDS=90
 REQUEST_TIMEOUT_SECONDS=15
 STALE_AIRCRAFT_SECONDS=900
 STALE_WEATHER_SECONDS=3600
 PREDICTION_HORIZON_SECONDS=900
+
+AIRCRAFT_SOURCE=hybrid
+LOCAL_ADSB_URL=http://127.0.0.1:8080/data/aircraft.json
+LOCAL_ADSB_TIMEOUT_SECONDS=3
+
 OUTPUT_PATH=output/flightink.png
 DATABASE_PATH=data/flightink.db
 CACHE_PATH=data/cache.json
@@ -202,15 +223,7 @@ Never commit your real home coordinates or `.env` file.
 
 ## Route data limitation
 
-Free ADS-B position data does not reliably include the departure and destination airports for every flight. FlightInk therefore does not guess routes.
-
-Exact, verified mappings can be added to:
-
-```text
-data/routes.json
-```
-
-When no reliable mapping exists, the display shows `Route unknown`.
+ADS-B position data does not reliably include departure and destination airports. FlightInk never guesses routes. Exact verified mappings can be added to `data/routes.json`; otherwise the display shows `Route unknown`.
 
 ## Project structure
 
@@ -222,7 +235,7 @@ FlightInk/
 ├── flightink/
 │   ├── admin.py                # local administration dashboard
 │   ├── aircraft_shapes.py      # aircraft-family silhouettes
-│   ├── api.py                  # external data clients
+│   ├── api.py                  # local and remote ADS-B plus weather clients
 │   ├── catalog.py              # local metadata catalogs
 │   ├── config.py               # environment configuration
 │   ├── display.py              # preview and Waveshare adapters
@@ -233,7 +246,6 @@ FlightInk/
 │   └── storage.py              # SQLite history and local cache
 ├── scripts/install_pi.sh
 ├── tests/
-├── .github/workflows/test.yml
 ├── .env.example
 ├── AGENTS.md
 └── main.py
@@ -242,8 +254,8 @@ FlightInk/
 ## Design principles
 
 - Free data sources must remain sufficient for the core application.
+- A local receiver is preferred when configured, but must not be mandatory.
 - Missing data must produce an explicit fallback rather than invented information.
 - Hardware-specific code must remain isolated from data retrieval and rendering.
 - Screen refreshes should occur only when the visible frame changes.
-- The application must continue running through temporary network and API failures.
-- Exact home coordinates, generated databases, caches, and output images must not be committed.
+- The application must continue through temporary receiver, network, and API failures.
