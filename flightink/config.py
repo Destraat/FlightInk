@@ -26,6 +26,9 @@ class Settings:
     stale_aircraft_seconds: int = 900
     stale_weather_seconds: int = 3600
     prediction_horizon_seconds: int = 900
+    aircraft_source: str = "hybrid"
+    local_adsb_url: str = "http://127.0.0.1:8080/data/aircraft.json"
+    local_adsb_timeout_seconds: int = 3
     airplanes_api_base: str = "https://api.airplanes.live/v2"
     weather_api_base: str = "https://api.open-meteo.com/v1/forecast"
 
@@ -36,9 +39,9 @@ class Settings:
             lat = float(os.environ["HOME_LAT"])
             lon = float(os.environ["HOME_LON"])
         except KeyError as exc:
-            raise RuntimeError("HOME_LAT en HOME_LON ontbreken in .env of de omgeving") from exc
+            raise RuntimeError("HOME_LAT and HOME_LON are required") from exc
         except ValueError as exc:
-            raise RuntimeError("HOME_LAT en HOME_LON moeten geldige getallen zijn") from exc
+            raise RuntimeError("HOME_LAT and HOME_LON must be valid numbers") from exc
 
         settings = cls(
             home_lat=lat,
@@ -57,22 +60,29 @@ class Settings:
             stale_aircraft_seconds=int(os.getenv("STALE_AIRCRAFT_SECONDS", "900")),
             stale_weather_seconds=int(os.getenv("STALE_WEATHER_SECONDS", "3600")),
             prediction_horizon_seconds=int(os.getenv("PREDICTION_HORIZON_SECONDS", "900")),
+            aircraft_source=os.getenv("AIRCRAFT_SOURCE", "hybrid").strip().lower(),
+            local_adsb_url=os.getenv("LOCAL_ADSB_URL", "http://127.0.0.1:8080/data/aircraft.json").strip(),
+            local_adsb_timeout_seconds=int(os.getenv("LOCAL_ADSB_TIMEOUT_SECONDS", "3")),
         )
         settings.validate()
         return settings
 
     def validate(self) -> None:
         if not -90 <= self.home_lat <= 90:
-            raise ValueError("HOME_LAT moet tussen -90 en 90 liggen")
+            raise ValueError("HOME_LAT must be between -90 and 90")
         if not -180 <= self.home_lon <= 180:
-            raise ValueError("HOME_LON moet tussen -180 en 180 liggen")
+            raise ValueError("HOME_LON must be between -180 and 180")
         if self.radius_nm <= 0 or self.radius_nm > 250:
-            raise ValueError("RADIUS_NM moet groter dan 0 en maximaal 250 zijn")
+            raise ValueError("RADIUS_NM must be greater than 0 and at most 250")
         if self.refresh_seconds < 20:
-            raise ValueError("REFRESH_SECONDS moet minimaal 20 zijn voor e-ink")
+            raise ValueError("REFRESH_SECONDS must be at least 20 for e-paper")
         if self.maximum_distance_km <= 0:
-            raise ValueError("MAXIMUM_DISTANCE_KM moet groter dan 0 zijn")
+            raise ValueError("MAXIMUM_DISTANCE_KM must be greater than 0")
         if self.stale_aircraft_seconds < self.refresh_seconds:
-            raise ValueError("STALE_AIRCRAFT_SECONDS moet minimaal één refreshinterval zijn")
+            raise ValueError("STALE_AIRCRAFT_SECONDS must be at least one refresh interval")
         if self.display_backend not in {"preview", "waveshare"}:
-            raise ValueError("DISPLAY_BACKEND moet preview of waveshare zijn")
+            raise ValueError("DISPLAY_BACKEND must be preview or waveshare")
+        if self.aircraft_source not in {"local", "remote", "hybrid"}:
+            raise ValueError("AIRCRAFT_SOURCE must be local, remote, or hybrid")
+        if self.local_adsb_timeout_seconds < 1:
+            raise ValueError("LOCAL_ADSB_TIMEOUT_SECONDS must be at least 1")
