@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import logging
+import time
 from pathlib import Path
 from typing import Protocol
 
@@ -60,9 +61,20 @@ class PreviewDisplay(BaseDisplay):
 
 
 class WaveshareDisplay(BaseDisplay):
-    """Adapter for configurable Waveshare 7.5-inch black/white modules."""
+    """Adapter for configurable Waveshare black/white e-paper modules.
 
-    def __init__(self, module_name: str = "waveshare_epd.epd7in5_V2") -> None:
+    E-paper cannot perform a true continuous fade. The optional ``erase``
+    transition simulates one with a small number of dithered full frames that
+    progressively remove black pixels before the new frame is displayed.
+    """
+
+    def __init__(
+        self,
+        module_name: str = "waveshare_epd.epd7in5_V2",
+        transition_mode: str = "direct",
+        transition_steps: int = 2,
+        transition_delay_seconds: float = 0.5,
+    ) -> None:
         super().__init__()
         try:
             module = importlib.import_module(module_name)
@@ -73,15 +85,49 @@ class WaveshareDisplay(BaseDisplay):
             ) from exc
         self.epd = module.EPD()
         self.epd.init()
+        self.transition_mode = transition_mode.strip().lower()
+        self.transition_steps = max(1, min(int(transition_steps), 4))
+        self.transition_delay_seconds = max(0.0, float(transition_delay_seconds))
+        self._last_image: Image.Image | None = None
+
+    def _prepare(self, image: Image.Image) -> Image.Image:
+        expected = (int(self.epd.width), int(self.epd.height))
+        prepared = image.convert("L")
+        if prepared.size != expected:
+            prepared = prepared.resize(expected)
+        return prepared
+
+    def _display_image(self, image: Image.Image) -> None:
+        monochrome = image.convert("1", dither=Image.Dither.FLOYDSTEINBERG)
+        self.epd.display(self.epd.getbuffer(monochrome))
+
+    def _erase_frames(self, old_image: Image.Image) -> list[Image.Image]:
+        white = Image.new("L", old_image.size, 255)
+        return [
+            Image.blend(old_image, white, step / (self.transition_steps + 1))
+            for step in range(1, self.transition_steps + 1)
+        ]
 
     def show(self, image_path: str | Path, force: bool = False) -> bool:
         if not self._changed(image_path, force):
             return False
-        image = Image.open(image_path).convert("1")
-        expected = (int(self.epd.width), int(self.epd.height))
-        if image.size != expected:
-            image = image.resize(expected)
-        self.epd.display(self.epd.getbuffer(image))
+
+        new_image = self._prepare(Image.open(image_path))
+        if self._last_image is not None and not force:
+            if self.transition_mode == "erase":
+                LOGGER.info("Applying %s-step soft erase transition", self.transition_steps)
+                for frame in self._erase_frames(self._last_image):
+                    self._display_image(frame)
+                    if self.transition_delay_seconds:
+                        time.sleep(self.transition_delay_seconds)
+            elif self.transition_mode == "white":
+                LOGGER.info("Applying white intermediate transition")
+                self._display_image(Image.new("L", new_image.size, 255))
+                if self.transition_delay_seconds:
+                    time.sleep(self.transition_delay_seconds)
+
+        self._display_image(new_image)
+        self._last_image = new_image.copy()
         return True
 
     def test(self, output_path: str | Path = "output/display-test.png") -> Path:
@@ -96,10 +142,21 @@ class WaveshareDisplay(BaseDisplay):
             LOGGER.exception("E-paper sleep failed")
 
 
-def create_display(backend: str, waveshare_module: str) -> Display:
+def create_display(
+    backend: str,
+    waveshare_module: str,
+    transition_mode: str = "direct",
+    transition_steps: int = 2,
+    transition_delay_seconds: float = 0.5,
+) -> Display:
     normalized = backend.strip().lower()
     if normalized == "waveshare":
-        return WaveshareDisplay(waveshare_module)
+        return WaveshareDisplay(
+            waveshare_module,
+            transition_mode=transition_mode,
+            transition_steps=transition_steps,
+            transition_delay_seconds=transition_delay_seconds,
+        )
     if normalized == "preview":
         return PreviewDisplay()
     raise ValueError(f"Unknown display backend: {backend}")

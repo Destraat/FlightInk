@@ -17,6 +17,9 @@ class Settings:
     display_height: int = 480
     display_backend: str = "preview"
     waveshare_module: str = "waveshare_epd.epd7in5_V2"
+    display_transition: str = "direct"
+    transition_steps: int = 2
+    transition_delay_seconds: float = 0.5
     database_path: str = "data/flightink.db"
     cache_path: str = "data/cache.json"
     minimum_altitude_ft: float = 500.0
@@ -51,6 +54,9 @@ class Settings:
             output_path=os.getenv("OUTPUT_PATH", "output/flightink.png"),
             display_backend=os.getenv("DISPLAY_BACKEND", "preview"),
             waveshare_module=os.getenv("WAVESHARE_MODULE", "waveshare_epd.epd7in5_V2"),
+            display_transition=os.getenv("DISPLAY_TRANSITION", "direct").strip().lower(),
+            transition_steps=int(os.getenv("TRANSITION_STEPS", "2")),
+            transition_delay_seconds=float(os.getenv("TRANSITION_DELAY_SECONDS", "0.5")),
             database_path=os.getenv("DATABASE_PATH", "data/flightink.db"),
             cache_path=os.getenv("CACHE_PATH", "data/cache.json"),
             minimum_altitude_ft=float(os.getenv("MINIMUM_ALTITUDE_FT", "500")),
@@ -82,6 +88,12 @@ class Settings:
             raise ValueError("STALE_AIRCRAFT_SECONDS must be at least one refresh interval")
         if self.display_backend not in {"preview", "waveshare"}:
             raise ValueError("DISPLAY_BACKEND must be preview or waveshare")
+        if self.display_transition not in {"direct", "white", "erase"}:
+            raise ValueError("DISPLAY_TRANSITION must be direct, white, or erase")
+        if not 1 <= self.transition_steps <= 4:
+            raise ValueError("TRANSITION_STEPS must be between 1 and 4")
+        if not 0 <= self.transition_delay_seconds <= 10:
+            raise ValueError("TRANSITION_DELAY_SECONDS must be between 0 and 10")
         if self.aircraft_source not in {"local", "remote", "hybrid"}:
             raise ValueError("AIRCRAFT_SOURCE must be local, remote, or hybrid")
         if self.local_adsb_timeout_seconds < 1:
