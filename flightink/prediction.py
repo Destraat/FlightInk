@@ -17,10 +17,10 @@ class PassagePrediction:
     @property
     def label(self) -> str:
         if self.seconds_until_closest is None:
-            return f"Verwachte passage: {self.closest_distance_km:.1f} km"
+            return f"Expected passage: {self.closest_distance_km:.1f} km"
         if self.approaching:
-            return f"Passeert over circa {self.seconds_until_closest} sec · {self.closest_distance_km:.1f} km"
-        return f"Passage geweest · {self.closest_distance_km:.1f} km"
+            return f"Passing in about {self.seconds_until_closest} sec - {self.closest_distance_km:.1f} km"
+        return f"Already passed - {self.closest_distance_km:.1f} km"
 
 
 def predict_passage(aircraft: Aircraft, home_lat: float, home_lon: float, horizon_seconds: int = 900) -> PassagePrediction:

@@ -25,8 +25,8 @@ class Route:
     @property
     def label(self) -> str:
         if self.origin and self.destination:
-            return f"{self.origin} → {self.destination}"
-        return "Route onbekend"
+            return f"{self.origin} -> {self.destination}"
+        return "Route unknown"
 
 
 class RouteResolver:

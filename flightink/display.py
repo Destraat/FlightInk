@@ -24,7 +24,7 @@ class BaseDisplay:
     def _changed(self, image_path: str | Path, force: bool) -> bool:
         digest = hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
         if not force and digest == self._last_digest:
-            LOGGER.info("Scherminhoud ongewijzigd; refresh overgeslagen")
+            LOGGER.info("Display content unchanged; refresh skipped")
             return False
         self._last_digest = digest
         return True
@@ -41,7 +41,7 @@ class BaseDisplay:
             draw.rectangle((x, 45, x + 35, 170), fill=0 if index % 2 == 0 else 1, outline=0)
         for y in range(220, 430, 25):
             draw.line((35, y, 765, y), fill=0, width=1 + ((y // 25) % 4))
-        draw.text((35, 185), "FlightInk display test · 800×480 · zwart/wit", fill=0)
+        draw.text((35, 185), "FlightInk display test - 800x480 - black/white", fill=0)
         image.save(output)
         return output
 
@@ -52,7 +52,7 @@ class PreviewDisplay(BaseDisplay):
     def show(self, image_path: str | Path, force: bool = False) -> bool:
         if not self._changed(image_path, force):
             return False
-        LOGGER.info("Preview bijgewerkt: %s", image_path)
+        LOGGER.info("Preview updated: %s", image_path)
         return True
 
     def sleep(self) -> None:
@@ -68,8 +68,8 @@ class WaveshareDisplay(BaseDisplay):
             module = importlib.import_module(module_name)
         except ImportError as exc:
             raise RuntimeError(
-                f"Waveshare-driver '{module_name}' niet gevonden. "
-                "Installeer de officiële waveshare_epd package of gebruik DISPLAY_BACKEND=preview."
+                f"Waveshare driver '{module_name}' not found. "
+                "Install the official waveshare_epd package or use DISPLAY_BACKEND=preview."
             ) from exc
         self.epd = module.EPD()
         self.epd.init()
@@ -93,7 +93,7 @@ class WaveshareDisplay(BaseDisplay):
         try:
             self.epd.sleep()
         except Exception:
-            LOGGER.exception("E-paper sleep mislukt")
+            LOGGER.exception("E-paper sleep failed")
 
 
 def create_display(backend: str, waveshare_module: str) -> Display:
@@ -102,4 +102,4 @@ def create_display(backend: str, waveshare_module: str) -> Display:
         return WaveshareDisplay(waveshare_module)
     if normalized == "preview":
         return PreviewDisplay()
-    raise ValueError(f"Onbekende displaybackend: {backend}")
+    raise ValueError(f"Unknown display backend: {backend}")

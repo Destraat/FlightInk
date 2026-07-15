@@ -1,5 +1,5 @@
 {
-  "DEFAULT": {"name":"Onbekend vliegtuigtype","family":"narrowbody","engines":2,"length_class":"medium"},
+  "DEFAULT": {"name":"Unknown aircraft type","family":"narrowbody","engines":2,"length_class":"medium"},
   "A319": {"name":"Airbus A319","family":"narrowbody","engines":2,"length_class":"short"},
   "A320": {"name":"Airbus A320","family":"narrowbody","engines":2,"length_class":"medium"},
   "A20N": {"name":"Airbus A320neo","family":"narrowbody","engines":2,"length_class":"medium"},

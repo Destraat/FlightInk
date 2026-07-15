@@ -1,110 +1,110 @@
 # FlightInk Agent Instructions
 
-## Rol
+## Role
 
-Je bent de software-agent voor FlightInk. Bouw en onderhoud een betrouwbare Python-applicatie die gratis ADS-B-data omzet naar een rustig 800×480 e-ink scherm voor vliegtuigen die over het ingestelde huispunt vliegen.
+You are the software agent for FlightInk. Build and maintain a reliable Python application that converts free ADS-B data into a calm 800x480 e-ink screen for aircraft passing near the configured home point.
 
-## Hoofddoel
+## Primary Goal
 
-Lever een werkende Raspberry Pi-app die:
+Deliver a working Raspberry Pi application that:
 
-1. gratis live vliegtuigposities ophaalt;
-2. het relevantste toestel boven of vlak bij het huis selecteert;
-3. vliegtuigtype, maatschappij, registratie, hoogte, snelheid, koers en afstand toont;
-4. waar mogelijk gratis herkomst en bestemming bepaalt;
-5. een groot correct zijaanzicht van het vliegtuig rendert;
-6. actuele lokale weersomstandigheden vertaalt naar een eenvoudige e-ink achtergrond;
-7. één vlag en één herkenbaar gebouw van de bestemming toont;
-8. een PNG-preview kan maken zonder aangesloten hardware;
-9. optioneel een Waveshare e-paper display kan aansturen.
+1. Fetches free live aircraft positions.
+2. Selects the most relevant aircraft over or near the configured home point.
+3. Shows aircraft type, airline, registration, altitude, speed, heading, and distance.
+4. Determines origin and destination when free and reliable data is available.
+5. Renders a large, correct side view of the aircraft.
+6. Translates current local weather into a simple e-ink background.
+7. Shows one flag and one recognizable destination landmark when reliable destination data exists.
+8. Can create a PNG preview without attached hardware.
+9. Can optionally drive a Waveshare e-paper display.
 
-## Niet-onderhandelbare eisen
+## Non-Negotiable Requirements
 
-- Gebruik geen betaalde API als verplichte dependency.
-- De applicatie moet blijven werken wanneer route-, weer- of metadata ontbreekt.
-- Geen API-sleutels, coördinaten of persoonsgegevens hardcoden.
-- Alle externe verzoeken krijgen een timeout, duidelijke User-Agent en foutafhandeling.
-- Het hoofdproces mag niet crashen door één mislukte API-call.
-- Render eerst naar een Pillow-image; houd hardware-output als losse adapter.
-- Houd rekening met ghosting: ververs een e-ink scherm niet onnodig vaak.
-- Gebruik type hints, dataclasses en kleine testbare functies.
-- Voeg tests toe bij iedere wijziging in selectie-, afstands-, mapping- of renderlogica.
-- Voeg geen auteursrechtelijk onduidelijke vliegtuigfoto’s of logo’s toe.
+- Do not make a paid API a required dependency.
+- The application must keep working when route, weather, or metadata is missing.
+- Do not hard-code API keys, coordinates, or personal data.
+- Every external request must have a timeout, clear User-Agent, and error handling.
+- The main process must not crash because one API call fails.
+- Render to a Pillow image first; keep hardware output in a separate adapter.
+- Account for ghosting: do not refresh an e-ink display unnecessarily.
+- Use type hints, dataclasses, and small testable functions.
+- Add tests for every change in selection, distance, mapping, or rendering logic.
+- Do not add aircraft photos or logos with unclear copyright status.
 
-## Gewenste architectuur
+## Desired Architecture
 
 ```text
 flightink/
-├── api/            # ADS-B, weer en optionele gratis routebronnen
-├── domain/         # dataclasses, selectie en berekeningen
-├── render/         # layout, vliegtuigvormen, weerachtergrond
-├── display/        # PNG en Waveshare adapters
-├── data/           # lokale mappings en cache
-└── main.py         # orchestration en CLI
+|-- api/            # ADS-B, weather, and optional free route sources
+|-- domain/         # dataclasses, selection, and calculations
+|-- render/         # layout, aircraft shapes, weather background
+|-- display/        # PNG and Waveshare adapters
+|-- data/           # local mappings and cache
+`-- main.py         # orchestration and CLI
 ```
 
-De eerste MVP mag in één `flightink.py` staan, maar splits deze zodra het bestand groter wordt dan ongeveer 500 regels.
+The first MVP may live in a single `flightink.py`, but split it once the file grows beyond roughly 500 lines.
 
-## Vliegtuigweergave
+## Aircraft Display
 
-- Toon het vliegtuig altijd als schoon zijaanzicht.
-- Spiegel horizontaal op basis van koers, maar draai het toestel niet schuin.
-- Gebruik een generieke vectorvorm per categorie als exact type ontbreekt:
+- Always show the aircraft as a clean side view.
+- Mirror horizontally based on heading, but do not rotate the aircraft diagonally.
+- Use a generic vector shape per category when the exact type is missing:
   - narrow-body jet;
   - wide-body jet;
   - regional jet;
   - turboprop;
   - helicopter;
   - unknown.
-- Gebruik maatschappij-aankleding alleen wanneer die betrouwbaar uit callsign/operator volgt.
-- Speciale liveries mogen alleen via een registratie-specifieke lokale override worden toegepast.
-- Voor zwart-wit e-ink moeten logo’s en kleurvlakken worden vertaald naar patronen, grijstinten of dither.
+- Use airline styling only when it reliably follows from callsign or operator data.
+- Special liveries may only be applied through a registration-specific local override.
+- For black-and-white e-ink, translate logos and color blocks into patterns, grayscale, or dithering.
 
-## Selectie van het relevante toestel
+## Relevant Aircraft Selection
 
-Bereken voor ieder toestel minimaal:
+For every aircraft, calculate at least:
 
-- horizontale afstand tot het huis met haversine;
-- geldige airborne-status;
-- naderend of wegvliegend op basis van vorige meting;
-- geschatte tijd tot dichtste passage wanneer voldoende gegevens bestaan.
+- horizontal distance to the home point with haversine;
+- valid airborne status;
+- approaching or departing state based on the previous measurement;
+- estimated time to closest passage when enough data exists.
 
-Voorkeursvolgorde:
+Preference order:
 
-1. toestel waarvan de voorspelde baan het huis het dichtst passeert;
-2. daarna naderend toestel;
-3. daarna kleinste horizontale afstand;
-4. negeer grondvoertuigen en toestellen onder een configureerbare minimumhoogte.
+1. Aircraft whose predicted track passes closest to the home point.
+2. Then approaching aircraft.
+3. Then smallest current horizontal distance.
+4. Ignore ground vehicles and aircraft below a configurable minimum altitude.
 
-## Routegegevens
+## Route Data
 
-Herkomst en bestemming zijn niet betrouwbaar aanwezig in ADS-B. Implementeer daarom trapsgewijs:
+Origin and destination are not reliably present in ADS-B. Implement route resolution in steps:
 
-1. lokale cache op callsign + datum;
-2. optionele gratis routebron;
-3. afleiding alleen wanneer betrouwbaar;
-4. anders expliciet `Route onbekend` tonen.
+1. Local cache by callsign plus date.
+2. Optional free route source.
+3. Inference only when reliable.
+4. Otherwise explicitly show `Route unknown`.
 
-Nooit een route verzinnen op basis van alleen maatschappij of vliegrichting.
+Never invent a route based only on airline or flight direction.
 
-## Weer
+## Weather
 
-Gebruik een gratis bron zonder verplichte betaalde sleutel, bijvoorbeeld Open-Meteo. Cache het resultaat minimaal tien minuten. Vertaal de huidige toestand naar eenvoudige achtergronden zoals helder, licht bewolkt, bewolkt, regen, mist of sneeuw. De wolken zijn decoratief en mogen het vliegtuig niet onleesbaar maken.
+Use a free source without a required paid key, such as Open-Meteo. Cache the result for at least ten minutes. Translate the current condition into simple backgrounds such as clear, partly cloudy, cloudy, rain, fog, or snow. Clouds are decorative and must not make the aircraft unreadable.
 
 ## Layout
 
-Doelresolutie: 800×480.
+Target resolution: 800x480.
 
-- Linker/middenvlak: groot vliegtuig met veel witruimte.
-- Rechterkolom: vlucht, route, hoogte, snelheid, koers en afstand.
-- Rechtsonder: één bestemmingskaart met gebouw en één vlag.
-- Onderrand: tijd, datum, weer en laatste update.
-- Gebruik duidelijke typografische hiërarchie en hoge contrasten.
-- Vermijd kleine tekst onder circa 14 px op 800×480.
+- Left and center: large aircraft with generous white space.
+- Right column: flight, route, altitude, speed, heading, and distance.
+- Bottom right: one destination card with a landmark and one flag.
+- Bottom edge: time, date, weather, and last update.
+- Use clear typographic hierarchy and high contrast.
+- Avoid small text below roughly 14 px at 800x480.
 
-## Uitvoering
+## Execution
 
-Ondersteun minimaal:
+Support at least:
 
 ```bash
 python flightink.py --demo
@@ -112,33 +112,33 @@ python flightink.py --once
 python flightink.py --loop
 ```
 
-- `--demo`: volledig offline voorbeeld.
-- `--once`: één live ophaling en PNG-render.
-- `--loop`: periodiek verversen met fouttolerantie.
+- `--demo`: fully offline example.
+- `--once`: one live fetch and PNG render.
+- `--loop`: periodic refresh with fault tolerance.
 
-## Testen en acceptatie
+## Testing and Acceptance
 
-Voer voor iedere pull request uit:
+Run for every pull request:
 
 ```bash
 pytest
 python flightink.py --demo
 ```
 
-Acceptatiecriteria:
+Acceptance criteria:
 
-- Er wordt een geldige 800×480 PNG aangemaakt.
-- Geen toestel resulteert in een nette wachtweergave.
-- Ontbrekende typecode, callsign, registratie of hoogte veroorzaakt geen crash.
-- Haversine-afstanden zijn getest.
-- Horizontaal spiegelen volgt de koersregels.
-- De vlag verschijnt maximaal één keer.
-- Het bestemmingsgebouw staat niet in het hoofdvlak.
+- A valid 800x480 PNG is created.
+- No aircraft results in a clean waiting state.
+- Missing type code, callsign, registration, or altitude does not crash.
+- Haversine distances are tested.
+- Horizontal mirroring follows the heading rules.
+- The flag appears at most once.
+- The destination landmark is not placed in the main aircraft area.
 
-## Git-proces
+## Git Process
 
-- Werk op een featurebranch.
-- Maak kleine, beschrijvende commits.
-- Open een pull request naar `main`.
-- Beschrijf in de PR: wat werkt, welke gratis bronnen zijn gebruikt, bekende beperkingen en hoe lokaal getest is.
-- Merge niet automatisch wanneer tests ontbreken of hardwaregedrag niet aantoonbaar veilig is.
+- Work on a feature branch.
+- Make small, descriptive commits.
+- Open a pull request to `main`.
+- In the PR, describe what works, which free sources are used, known limitations, and how it was tested locally.
+- Do not merge automatically when tests are missing or hardware behavior is not demonstrably safe.

@@ -8,7 +8,7 @@
   "ARN": {"city": "Stockholm", "country": "SE", "landmark": "Stadhuis van Stockholm"},
   "OSL": {"city": "Oslo", "country": "NO", "landmark": "Operahuis Oslo"},
   "VIE": {"city": "Wenen", "country": "AT", "landmark": "Stephansdom"},
-  "ZRH": {"city": "Zürich", "country": "CH", "landmark": "Grossmünster"},
-  "LIS": {"city": "Lissabon", "country": "PT", "landmark": "Torre de Belém"},
+  "ZRH": {"city": "Zurich", "country": "CH", "landmark": "Grossmunster"},
+  "LIS": {"city": "Lisbon", "country": "PT", "landmark": "Torre de Belem"},
   "FCO": {"city": "Rome", "country": "IT", "landmark": "Colosseum"}
 }

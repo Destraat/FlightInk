@@ -20,14 +20,14 @@ FlightInk can use either free internet ADS-B data, your own RTL-SDR USB receiver
 - Cached fallback data during temporary network or API failures.
 - Duplicate-frame detection to avoid unnecessary e-paper refreshes.
 - PNG preview mode, physical display test, and local ADS-B receiver test.
-- Local administration dashboard on port `8080`.
+- Local administration dashboard on port `8090`, so it does not collide with dump1090/readsb on `8080`.
 - systemd services and automated tests on Python 3.11 and 3.12.
 
 ## Hardware
 
 ### Required
 
-- Raspberry Pi Zero 2 W with GPIO headers;
+- Raspberry Pi Zero 2 W with GPIO headers, or a Raspberry Pi Zero W if you can tolerate slower installs and refreshes;
 - Waveshare 7.5-inch black-and-white 800×480 e-Paper HAT;
 - microSD card;
 - 5 V micro-USB power supply;
@@ -39,7 +39,7 @@ To receive aircraft directly instead of relying only on internet data, add:
 
 - an RTL-SDR USB dongle suitable for 1090 MHz ADS-B;
 - a 1090 MHz ADS-B antenna;
-- a USB OTG adapter or powered USB hub for the Raspberry Pi Zero 2 W;
+- a USB OTG adapter or powered USB hub for the Raspberry Pi Zero family;
 - dump1090, dump1090-fa, dump1090-mutability, or readsb.
 
 The USB receiver does not connect directly to FlightInk. Decoder software reads the radio signals and exposes aircraft as JSON. FlightInk reads that JSON endpoint.
@@ -126,8 +126,8 @@ cp .env.example .env
 Set your coordinates and choose a source:
 
 ```env
-HOME_LAT=52.0000
-HOME_LON=6.0000
+HOME_LAT=0.0000
+HOME_LON=0.0000
 AIRCRAFT_SOURCE=remote
 DISPLAY_BACKEND=preview
 ```
@@ -147,6 +147,8 @@ python -m compileall flightink main.py
 
 ## Raspberry Pi installation
 
+FlightInk runs best on a Raspberry Pi Zero 2 W, but the same installation path also works on a Raspberry Pi Zero W. Expect the first dependency install and each screen refresh to be slower on the original Zero W.
+
 ```bash
 git clone https://github.com/Destraat/FlightInk.git
 cd FlightInk
@@ -154,6 +156,8 @@ chmod +x scripts/install_pi.sh
 ./scripts/install_pi.sh
 sudo nano /opt/flightink/.env
 ```
+
+The installer enables SPI when `raspi-config` is available and installs the official Waveshare Python driver inside the virtual environment.
 
 At minimum, set:
 
@@ -187,16 +191,16 @@ journalctl -u flightink -f
 Open the local dashboard from another device on the same network:
 
 ```text
-http://flightink.local:8080
+http://flightink.local:8090
 ```
 
-When mDNS is unavailable, run `hostname -I` and use the Raspberry Pi IP address. Do not expose port `8080` directly to the public internet.
+When mDNS is unavailable, run `hostname -I` and use the Raspberry Pi IP address. Do not expose port `8090` directly to the public internet.
 
 ## Configuration
 
 ```env
-HOME_LAT=52.5600
-HOME_LON=5.9100
+HOME_LAT=0.0000
+HOME_LON=0.0000
 RADIUS_NM=10
 REFRESH_SECONDS=60
 MAXIMUM_DISTANCE_KM=20
@@ -216,7 +220,7 @@ CACHE_PATH=data/cache.json
 DISPLAY_BACKEND=preview
 WAVESHARE_MODULE=waveshare_epd.epd7in5_V2
 ADMIN_HOST=0.0.0.0
-ADMIN_PORT=8080
+ADMIN_PORT=8090
 ```
 
 Never commit your real home coordinates or `.env` file.

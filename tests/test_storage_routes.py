@@ -32,4 +32,4 @@ def test_route_resolver_rejects_unverified_wildcard_guess(tmp_path: Path) -> Non
     storage = Storage(str(tmp_path / "flightink.db"), str(tmp_path / "cache.json"))
     route = RouteResolver(storage).resolve("KLM14001")
     assert route.destination is None
-    assert route.label == "Route onbekend"
+    assert route.label == "Route unknown"

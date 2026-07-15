@@ -33,16 +33,16 @@ def render_dashboard(aircraft: Aircraft | None, weather: Weather | None, output_
 
 
 def _status_title(status: str) -> str:
-    return {"live":"LIVE BOVEN ONS HUIS","offline":"GEEN INTERNETVERBINDING","aircraft_error":"VLUCHTBRON NIET BESCHIKBAAR","stale":"LAATST BEKENDE VLUCHT","no_aircraft":"RUSTIG IN HET LUCHTRUIM"}.get(status, "LIVE BOVEN ONS HUIS")
+    return {"live":"LIVE NEAR HOME","offline":"NO INTERNET CONNECTION","aircraft_error":"FLIGHT SOURCE UNAVAILABLE","stale":"LAST KNOWN FLIGHT","no_aircraft":"QUIET AIRSPACE"}.get(status, "LIVE NEAR HOME")
 
 
 def _draw_empty_state(draw: ImageDraw.ImageDraw, fonts: dict[str, ImageFont.ImageFont], status: str, stale_minutes: int | None) -> None:
-    messages = {"offline":("Geen internetverbinding","Het scherm probeert het automatisch opnieuw."),"aircraft_error":("Vliegtuigdata tijdelijk niet beschikbaar","Opgeslagen gegevens blijven lokaal beschikbaar."),"no_aircraft":("Geen vliegtuig in de buurt","Er verschijnt vanzelf een toestel zodra het nadert.")}
+    messages = {"offline":("No internet connection","The display will retry automatically."),"aircraft_error":("Aircraft data is temporarily unavailable","Stored data remains available locally."),"no_aircraft":("No aircraft nearby","A flight will appear when one approaches.")}
     heading, body = messages.get(status, messages["no_aircraft"])
     draw.text((95, 190), heading, font=fonts["heading"], fill=20)
     draw.text((95, 238), body, font=fonts["body"], fill=60)
     if stale_minutes is not None:
-        draw.text((95, 278), f"Laatste geldige gegevens: {stale_minutes} minuten geleden", font=fonts["small"], fill=80)
+        draw.text((95, 278), f"Last valid data: {stale_minutes} minutes ago", font=fonts["small"], fill=80)
 
 
 def _draw_aircraft(draw: ImageDraw.ImageDraw, aircraft: Aircraft, box: tuple[int, int, int, int], fonts: dict[str, ImageFont.ImageFont], weather: Weather | None) -> None:
@@ -76,13 +76,13 @@ def _draw_details(draw: ImageDraw.ImageDraw, aircraft: Aircraft, fonts: dict[str
     draw.text((x,y), aircraft.callsign or aircraft.hex.upper(), font=fonts["heading"], fill=10)
     draw.text((x,y+34), str(livery.get("name",aircraft.airline_code)), font=fonts["small"], fill=55)
     draw.text((x,y+57), aircraft_name(aircraft.type_code), font=fonts["body"], fill=25)
-    draw.text((x,y+84), aircraft.registration or "Registratie onbekend", font=fonts["small"], fill=65)
-    draw.text((x,y+111), getattr(route,"label","Route onbekend") if route else "Route onbekend", font=fonts["small_bold"], fill=30)
+    draw.text((x,y+84), aircraft.registration or "Registration unknown", font=fonts["small"], fill=65)
+    draw.text((x,y+111), getattr(route,"label","Route unknown") if route else "Route unknown", font=fonts["small_bold"], fill=30)
     if prediction:
         draw.text((x,y+137), prediction.label, font=fonts["tiny"], fill=45)
-    altitude = f"{aircraft.altitude_ft:,.0f} ft" if aircraft.altitude_ft is not None else "onbekend"
-    speed = f"{aircraft.speed_knots*1.852:,.0f} km/u" if aircraft.speed_knots is not None else "onbekend"
-    for yy,(label,value) in zip((254,300,346),[("AFSTAND NU",f"{aircraft.distance_km:.1f} km"),("HOOGTE",altitude),("SNELHEID",speed)]):
+    altitude = f"{aircraft.altitude_ft:,.0f} ft" if aircraft.altitude_ft is not None else "unknown"
+    speed = f"{aircraft.speed_knots*1.852:,.0f} km/h" if aircraft.speed_knots is not None else "unknown"
+    for yy,(label,value) in zip((254,300,346),[("DISTANCE NOW",f"{aircraft.distance_km:.1f} km"),("ALTITUDE",altitude),("SPEED",speed)]):
         draw.text((x,yy), label, font=fonts["tiny"], fill=80)
         draw.text((x,yy+14), value, font=fonts["body_bold"], fill=20)
 
@@ -90,16 +90,16 @@ def _draw_details(draw: ImageDraw.ImageDraw, aircraft: Aircraft, fonts: dict[str
 def _draw_footer(draw: ImageDraw.ImageDraw, weather: Weather | None, stats: dict[str, int], fonts: dict[str, ImageFont.ImageFont], stale_minutes: int | None) -> None:
     draw.line((28,394,772,394), fill=100, width=1)
     if weather:
-        temp = f"{weather.temperature_c:.1f} °C" if weather.temperature_c is not None else "-- °C"
-        clouds = f"{weather.cloud_cover}% bewolking" if weather.cloud_cover is not None else "bewolking onbekend"
-        text = f"WEER   {temp} · {clouds}"
+        temp = f"{weather.temperature_c:.1f} deg C" if weather.temperature_c is not None else "-- deg C"
+        clouds = f"{weather.cloud_cover}% cloud cover" if weather.cloud_cover is not None else "cloud cover unknown"
+        text = f"WEATHER   {temp} - {clouds}"
     else:
-        text = "WEER   niet beschikbaar"
+        text = "WEATHER   unavailable"
     draw.text((28,407), text, font=fonts["body_bold"], fill=30)
     passages = int(stats.get("passages",stats.get("unique_aircraft",0)))
-    draw.text((28,442), f"Vandaag {passages} passages", font=fonts["small"], fill=55)
-    freshness = f" · data {stale_minutes} min oud" if stale_minutes else ""
-    draw.text((545,442), datetime.now().strftime("Bijgewerkt %H:%M")+freshness, font=fonts["small"], fill=55)
+    draw.text((28,442), f"Today {passages} passages", font=fonts["small"], fill=55)
+    freshness = f" - data {stale_minutes} min old" if stale_minutes else ""
+    draw.text((545,442), datetime.now().strftime("Updated %H:%M")+freshness, font=fonts["small"], fill=55)
 
 
 def _cloud(draw: ImageDraw.ImageDraw, x: int, y: int, scale: float) -> None:
