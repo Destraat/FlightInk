@@ -157,7 +157,7 @@ chmod +x scripts/install_pi.sh
 sudo nano /opt/flightink/.env
 ```
 
-The installer enables SPI when `raspi-config` is available and installs the official Waveshare Python driver inside the virtual environment.
+The installer enables SPI when `raspi-config` is available, installs Pi-only runtime dependencies from `requirements-pi.txt`, and installs the official Waveshare Python driver inside the virtual environment.
 
 At minimum, set:
 
@@ -184,6 +184,14 @@ Start the services:
 sudo systemctl start flightink flightink-admin
 sudo systemctl status flightink
 journalctl -u flightink -f
+```
+
+If the Waveshare import fails, re-run the installer and check these quick diagnostics:
+
+```bash
+ls /dev/spidev*
+/opt/flightink/.venv/bin/python -c "import spidev, gpiozero"
+/opt/flightink/.venv/bin/python -c "import waveshare_epd.epd7in5_V2 as m; print(m.EPD_WIDTH, m.EPD_HEIGHT)"
 ```
 
 ## Administration dashboard

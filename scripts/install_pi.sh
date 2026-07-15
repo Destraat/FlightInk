@@ -24,6 +24,9 @@ sudo chown -R "$INSTALL_USER":"$INSTALL_GROUP" "$APP_DIR"
 sudo -u "$INSTALL_USER" python3 -m venv "$APP_DIR/.venv"
 sudo -u "$INSTALL_USER" "$APP_DIR/.venv/bin/pip" install --upgrade pip
 sudo -u "$INSTALL_USER" "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements.txt"
+if [ -f "$APP_DIR/requirements-pi.txt" ]; then
+  sudo -u "$INSTALL_USER" "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements-pi.txt"
+fi
 sudo -u "$INSTALL_USER" "$APP_DIR/.venv/bin/pip" install --upgrade "$WAVESHARE_DRIVER_URL"
 
 if [ ! -f "$APP_DIR/.env" ]; then
@@ -46,6 +49,12 @@ sudo systemctl enable flightink.service flightink-admin.service
 ADMIN_PORT=$(awk -F= '/^ADMIN_PORT=/{print $2}' "$APP_DIR/.env" | tail -n 1)
 ADMIN_PORT=${ADMIN_PORT:-8090}
 HOST_IP=$(hostname -I | awk '{print $1}')
+if ! ls /dev/spidev* >/dev/null 2>&1; then
+  echo "SPI device not found yet. Reboot the Pi once before running --display-test."
+fi
+if ! sudo -u "$INSTALL_USER" "$APP_DIR/.venv/bin/python" -c "import waveshare_epd.epd7in5_V2" >/dev/null 2>&1; then
+  echo "Waveshare import check failed. Re-run this installer and review pip output."
+fi
 echo "Installation complete for user $INSTALL_USER."
 echo "Preview test: $APP_DIR/.venv/bin/python $APP_DIR/main.py --once --preview"
 echo "Hardware test: $APP_DIR/.venv/bin/python $APP_DIR/main.py --display-test"
