@@ -18,8 +18,6 @@ from flightink.prediction import PassagePrediction, predict_passage, selection_s
 from flightink.routes import RouteResolver
 from flightink.storage import Storage
 
-# Install the richer monochrome landmark renderer without coupling the generic
-# dashboard module to a specific landmark catalogue.
 renderer_module._draw_landmark = draw_landmark
 render_dashboard = renderer_module.render_dashboard
 
@@ -108,7 +106,15 @@ def run_once(settings: Settings, storage: Storage, resolver: RouteResolver, disp
     else:
         status = "no_aircraft"
 
-    route = resolver.resolve(selected.callsign) if selected else None
+    route = (
+        resolver.resolve(
+            callsign=selected.callsign,
+            icao24=selected.hex,
+            registration=selected.registration,
+        )
+        if selected
+        else None
+    )
     if selected and status == "live":
         storage.record_sighting(selected, route, prediction)
 
@@ -154,7 +160,8 @@ def main() -> None:
     if args.preview:
         settings = Settings(**{**settings.__dict__, "display_backend": "preview"})
     storage = Storage(settings.database_path, settings.cache_path)
-    resolver = RouteResolver(storage)
+    session = create_session()
+    resolver = RouteResolver(storage, settings, session)
     display = create_display(
         settings.display_backend,
         settings.waveshare_module,
@@ -162,7 +169,6 @@ def main() -> None:
         transition_steps=settings.transition_steps,
         transition_delay_seconds=settings.transition_delay_seconds,
     )
-    session = create_session()
 
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)

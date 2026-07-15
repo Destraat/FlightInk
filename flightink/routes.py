@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
-from dataclasses import dataclass
+import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import requests
+
+from .config import Settings
 from .storage import Storage
 
+LOGGER = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
 ROUTES_FILE = ROOT / "data" / "routes.json"
 DESTINATIONS_FILE = ROOT / "data" / "destinations.json"
+AIRPORT_ALIASES_FILE = ROOT / "data" / "airport_aliases.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,52 +37,184 @@ class Route:
 
 
 class RouteResolver:
-    """Resolve only exact callsigns from a local, user-maintained catalogue.
+    """Resolve routes from exact local callsigns, then OpenSky by ICAO24.
 
-    Broad prefix guesses are intentionally rejected because a flight-number range
-    does not reliably map to one destination. Cached exact entries remain valid.
+    OpenSky results are cached because the route endpoint is rate limited and a
+    flight route normally does not change while an aircraft passes the house.
     """
 
-    def __init__(self, storage: Storage) -> None:
+    def __init__(self, storage: Storage, settings: Settings, session: requests.Session | None = None) -> None:
         self.storage = storage
+        self.settings = settings
+        self.session = session or requests.Session()
         self.routes = self._load_json(ROUTES_FILE)
         self.destinations = self._load_json(DESTINATIONS_FILE)
+        self.airport_aliases = self._load_json(AIRPORT_ALIASES_FILE)
+        self._token: str | None = None
+        self._token_expires_at = 0.0
 
-    def resolve(self, callsign: str) -> Route:
-        normalized = re.sub(r"\s+", "", callsign or "").upper()
-        if not normalized:
+    def resolve(
+        self,
+        callsign: str,
+        icao24: str | None = None,
+        registration: str | None = None,
+    ) -> Route:
+        normalized_callsign = re.sub(r"\s+", "", callsign or "").upper()
+        normalized_icao24 = re.sub(r"[^0-9a-f]", "", (icao24 or "").lower())
+
+        local = self._resolve_local(normalized_callsign)
+        if local.origin or local.destination:
+            return local
+
+        if not self.settings.opensky_routes_enabled or len(normalized_icao24) != 6:
             return Route()
 
-        cached = self.storage.get_cache(f"route:{normalized}", 30 * 24 * 3600)
+        cache_key = f"route:opensky:{normalized_icao24}:{normalized_callsign or '-'}"
+        cached = self.storage.get_cache(cache_key, self.settings.opensky_route_cache_seconds)
         if isinstance(cached, dict):
             try:
                 return Route(**cached)
             except TypeError:
                 pass
 
-        route_data = self.routes.get(normalized)
+        try:
+            route = self._resolve_opensky(normalized_icao24, normalized_callsign)
+        except requests.RequestException:
+            LOGGER.warning(
+                "OpenSky route lookup failed for %s (%s)",
+                registration or normalized_icao24,
+                normalized_callsign or "no callsign",
+                exc_info=True,
+            )
+            return Route()
+
+        if route.origin or route.destination:
+            self.storage.set_cache(cache_key, asdict(route))
+        else:
+            # Short negative cache avoids hammering OpenSky for an unresolved live flight.
+            self.storage.set_cache(cache_key, asdict(route))
+        return route
+
+    def _resolve_local(self, normalized_callsign: str) -> Route:
+        if not normalized_callsign:
+            return Route()
+
+        cached = self.storage.get_cache(f"route:{normalized_callsign}", 30 * 24 * 3600)
+        if isinstance(cached, dict):
+            try:
+                return Route(**cached)
+            except TypeError:
+                pass
+
+        route_data = self.routes.get(normalized_callsign)
         if not isinstance(route_data, dict):
             return Route()
 
-        destination_code = route_data.get("destination_airport") or route_data.get("destination")
-        destination_meta = self.destinations.get(destination_code, {}) if destination_code else {}
-        route = Route(
-            origin=route_data.get("origin_airport") or route_data.get("origin"),
-            destination=destination_code,
-            destination_country=destination_meta.get("country"),
-            landmark=destination_meta.get("landmark"),
+        route = self._build_route(
+            route_data.get("origin_airport") or route_data.get("origin"),
+            route_data.get("destination_airport") or route_data.get("destination"),
             source=str(route_data.get("source") or "local_exact"),
             verified_at=route_data.get("verified_at"),
         )
-        self.storage.set_cache(f"route:{normalized}", {
-            "origin": route.origin,
-            "destination": route.destination,
-            "destination_country": route.destination_country,
-            "landmark": route.landmark,
-            "source": route.source,
-            "verified_at": route.verified_at,
-        })
+        self.storage.set_cache(f"route:{normalized_callsign}", asdict(route))
         return route
+
+    def _resolve_opensky(self, icao24: str, callsign: str) -> Route:
+        now = int(time.time())
+        begin = now - self.settings.opensky_route_lookback_hours * 3600
+        headers = {"Accept": "application/json"}
+        token = self._access_token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        response = self.session.get(
+            f"{self.settings.opensky_api_base}/flights/aircraft",
+            params={"icao24": icao24, "begin": begin, "end": now},
+            headers=headers,
+            timeout=self.settings.request_timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, list):
+            return Route()
+
+        candidates = [item for item in payload if isinstance(item, dict)]
+        if not candidates:
+            return Route()
+
+        best = max(candidates, key=lambda item: self._flight_score(item, callsign, now))
+        origin = best.get("estDepartureAirport")
+        destination = best.get("estArrivalAirport")
+        if not origin and not destination:
+            return Route()
+
+        return self._build_route(
+            origin,
+            destination,
+            source="opensky_aircraft_flights",
+            verified_at=str(best.get("lastSeen") or best.get("firstSeen") or now),
+        )
+
+    @staticmethod
+    def _flight_score(item: dict[str, Any], callsign: str, now: int) -> tuple[int, int, int, int]:
+        item_callsign = re.sub(r"\s+", "", str(item.get("callsign") or "")).upper()
+        callsign_score = 1 if callsign and item_callsign == callsign else 0
+        route_score = int(bool(item.get("estDepartureAirport"))) + int(bool(item.get("estArrivalAirport")))
+        first_seen = int(item.get("firstSeen") or 0)
+        last_seen = int(item.get("lastSeen") or 0)
+        active_or_recent = 1 if first_seen <= now and (not last_seen or last_seen >= now - 12 * 3600) else 0
+        return callsign_score, active_or_recent, route_score, max(first_seen, last_seen)
+
+    def _build_route(
+        self,
+        origin: Any,
+        destination: Any,
+        source: str,
+        verified_at: str | None,
+    ) -> Route:
+        origin_code = self._display_airport(origin)
+        destination_code = self._display_airport(destination)
+        destination_meta = self.destinations.get(destination_code, {}) if destination_code else {}
+        return Route(
+            origin=origin_code,
+            destination=destination_code,
+            destination_country=destination_meta.get("country"),
+            landmark=destination_meta.get("landmark"),
+            source=source,
+            verified_at=verified_at,
+        )
+
+    def _display_airport(self, code: Any) -> str | None:
+        value = str(code or "").strip().upper()
+        if not value or value == "-":
+            return None
+        alias = self.airport_aliases.get(value)
+        return str(alias).upper() if alias else value
+
+    def _access_token(self) -> str | None:
+        if not self.settings.opensky_client_id or not self.settings.opensky_client_secret:
+            return None
+        now = time.time()
+        if self._token and now < self._token_expires_at - 30:
+            return self._token
+
+        response = self.session.post(
+            self.settings.opensky_token_url,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": self.settings.opensky_client_id,
+                "client_secret": self.settings.opensky_client_secret,
+            },
+            timeout=self.settings.request_timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        token = payload.get("access_token")
+        if not token:
+            return None
+        self._token = str(token)
+        self._token_expires_at = now + int(payload.get("expires_in") or 300)
+        return self._token
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
