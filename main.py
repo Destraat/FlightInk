@@ -8,14 +8,20 @@ from dataclasses import asdict
 
 import requests
 
+from flightink import renderer as renderer_module
 from flightink.api import create_session, fetch_aircraft, fetch_local_aircraft, fetch_weather
 from flightink.config import Settings
 from flightink.display import Display, create_display
+from flightink.landmarks import draw_landmark
 from flightink.models import Aircraft, Weather
 from flightink.prediction import PassagePrediction, predict_passage, selection_score
-from flightink.renderer import render_dashboard
 from flightink.routes import RouteResolver
 from flightink.storage import Storage
+
+# Install the richer monochrome landmark renderer without coupling the generic
+# dashboard module to a specific landmark catalogue.
+renderer_module._draw_landmark = draw_landmark
+render_dashboard = renderer_module.render_dashboard
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 LOGGER = logging.getLogger("flightink")
