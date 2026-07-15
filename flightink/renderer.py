@@ -61,14 +61,16 @@ def _draw_scene_header(
     box: tuple[int, int, int, int],
 ) -> None:
     x1, y1, x2, _ = box
-    draw.text((x1 + 4, y1), "BOVEN ONS", font=fonts["title"], fill=16)
-    draw.text((x1 + 4, y1 + 30), "LIVE VLUCHTINFORMATIE", font=fonts["small"], fill=40)
-    draw.text((x2 - 180, y1 + 4), _status_title(status), font=fonts["tiny"], fill=60)
-    draw.line((x1 + 4, y1 + 52, x1 + 36, y1 + 52), fill=45, width=2)
+    draw.text((x1 + 4, y1 + 2), "BOVEN ONS", font=fonts["title"], fill=16)
+    draw.text((x1 + 4, y1 + 26), "LIVE VLUCHTINFORMATIE", font=fonts["small"], fill=40)
+    draw.text((x2 - 104, y1 + 4), _status_title(status), font=fonts["tiny"], fill=60)
+    draw.line((x1 + 4, y1 + 44, x1 + 34, y1 + 44), fill=45, width=2)
 
 
 def _draw_scene_background(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], weather: Weather | None) -> None:
     x1, y1, x2, y2 = box
+    for shade, inset in ((248, 0), (246, 6), (244, 12)):
+        draw.rectangle((x1 + inset, y1 + 52 + inset // 2, x2 - inset, y2 - 16), outline=shade, width=1)
     horizon_y = y2 - 66
     draw.line((x1 + 6, horizon_y, x2 - 6, horizon_y), fill=140, width=1)
     for idx in range(10):
@@ -197,17 +199,19 @@ def _draw_right_panel(
     destination_city = _city_for_code(route_destination)
     landmark = getattr(route, "landmark", None) or "Onbekende bestemming"
 
-    cursor = y1 + 12
-    draw.text((x1 + 10, cursor), "VLUCHT", font=fonts["tiny"], fill=80)
-    cursor += 16
-    draw.text((x1 + 10, cursor), aircraft.callsign or aircraft.hex.upper(), font=fonts["panel_title"], fill=12)
-    draw.text((x2 - 58, cursor + 2), str(livery.get("marking") or aircraft.airline_code), font=fonts["small_bold"], fill=28)
-    cursor += 28
-    draw.text((x1 + 10, cursor), str(livery.get("name", aircraft.airline_code)), font=fonts["small"], fill=50)
-    cursor += 20
-    draw.text((x1 + 10, cursor), aircraft_name(aircraft.type_code), font=fonts["body"], fill=28)
-    draw.text((x1 + 10, cursor + 18), aircraft.registration or "Registratie onbekend", font=fonts["tiny"], fill=82)
-    cursor += 44
+    flight_bottom = y1 + 88
+    draw.rounded_rectangle((x1 + 8, y1 + 8, x2 - 8, flight_bottom), radius=4, outline=120, width=1, fill=246)
+    cursor = y1 + 14
+    draw.text((x1 + 12, cursor), "VLUCHT", font=fonts["tiny"], fill=80)
+    cursor += 14
+    draw.text((x1 + 12, cursor), aircraft.callsign or aircraft.hex.upper(), font=fonts["panel_title"], fill=12)
+    _draw_airline_badge(draw, x2 - 58, y1 + 16, str(livery.get("marking") or aircraft.airline_code), fonts)
+    cursor += 18
+    draw.text((x1 + 12, cursor), str(livery.get("name", aircraft.airline_code)), font=fonts["small"], fill=50)
+    cursor += 14
+    draw.text((x1 + 12, cursor), aircraft_name(aircraft.type_code), font=fonts["body"], fill=28)
+    draw.text((x1 + 12, cursor + 14), aircraft.registration or "Registratie onbekend", font=fonts["tiny"], fill=82)
+    cursor = flight_bottom + 8
     draw.line((x1 + 8, cursor, x2 - 8, cursor), fill=130, width=1)
     cursor += 8
 
@@ -216,7 +220,7 @@ def _draw_right_panel(
     cursor += 14
     draw.text((x1 + 10, cursor), route_origin, font=fonts["heading"], fill=18)
     draw.text((x1 + 117, cursor), route_destination, font=fonts["heading"], fill=18)
-    draw.text((x1 + 87, cursor + 3), ">", font=fonts["body_bold"], fill=34)
+    draw.text((x1 + 87, cursor + 2), ">", font=fonts["body_bold"], fill=34)
     draw.text((x1 + 10, cursor + 28), _city_for_code(route_origin), font=fonts["tiny"], fill=72)
     draw.text((x1 + 117, cursor + 28), destination_city, font=fonts["tiny"], fill=72)
     draw.text((x1 + 117, cursor + 42), _country_name(destination_country), font=fonts["tiny"], fill=72)
@@ -241,7 +245,7 @@ def _draw_right_panel(
         icon(draw, x1 + 10, cursor + 2)
         draw.text((x1 + 30, cursor), label, font=fonts["tiny"], fill=80)
         draw.text((x1 + 106, cursor), value, font=fonts["small_bold"], fill=22)
-        cursor += 22
+        cursor += 20
 
     draw.line((x1 + 8, cursor + 2, x2 - 8, cursor + 2), fill=130, width=1)
     cursor += 10
@@ -279,15 +283,29 @@ def _draw_footer(
     else:
         temp = "-- C"
         cloud = "weer onbekend"
-    draw.text((34, y - 4), f"{temp}   {cloud.upper()}", font=fonts["small"], fill=30)
+    draw.text((34, y - 4), f"{temp}   {cloud.upper()}", font=fonts["small_bold"], fill=30)
 
     passages = int(stats.get("passages", stats.get("unique_aircraft", 0)))
     date_text = datetime.now().strftime("%d %b %Y")
-    draw.text((300, y - 4), f"{date_text}   {passages} passages", font=fonts["small"], fill=42)
+    draw.text((282, y - 4), f"{date_text}   {passages} passages", font=fonts["small"], fill=42)
 
     updated = datetime.now().strftime("%H:%M")
     suffix = f" - data {stale_minutes} min oud" if stale_minutes else ""
-    draw.text((610, y - 4), f"{updated}{suffix}", font=fonts["small"], fill=42)
+    draw.text((616, y - 4), f"{updated}{suffix}", font=fonts["small"], fill=42)
+
+
+def _draw_airline_badge(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    code: str,
+    fonts: dict[str, ImageFont.ImageFont],
+) -> None:
+    draw.rounded_rectangle((x, y, x + 46, y + 26), radius=3, outline=125, width=1, fill=242)
+    draw.text((x + 8, y + 8), code[:4], font=fonts["tiny"], fill=32)
+    draw.ellipse((x + 18, y + 3, x + 21, y + 6), fill=90)
+    draw.ellipse((x + 23, y + 3, x + 26, y + 6), fill=90)
+    draw.ellipse((x + 28, y + 3, x + 31, y + 6), fill=90)
 
 
 def _draw_flag(draw: ImageDraw.ImageDraw, country_code: str | None, x: int, y: int, width: int, height: int) -> None:
@@ -504,12 +522,12 @@ def _fonts() -> dict[str, ImageFont.ImageFont]:
         return ImageFont.load_default()
 
     return {
-        "title": load(38, True),
-        "panel_title": load(36, True),
-        "heading": load(30, True),
-        "body": load(19),
-        "body_bold": load(19, True),
-        "small": load(14),
-        "small_bold": load(14, True),
-        "tiny": load(11, True),
+        "title": load(17, True),
+        "panel_title": load(16, True),
+        "heading": load(15, True),
+        "body": load(13),
+        "body_bold": load(13, True),
+        "small": load(11),
+        "small_bold": load(11, True),
+        "tiny": load(9, True),
     }
