@@ -126,8 +126,8 @@ cp .env.example .env
 Set your coordinates and choose a source:
 
 ```env
-HOME_LAT=0.0000
-HOME_LON=0.0000
+HOME_LAT=50.8514
+HOME_LON=5.6910
 AIRCRAFT_SOURCE=remote
 DISPLAY_BACKEND=preview
 ```
@@ -199,8 +199,8 @@ When mDNS is unavailable, run `hostname -I` and use the Raspberry Pi IP address.
 ## Configuration
 
 ```env
-HOME_LAT=0.0000
-HOME_LON=0.0000
+HOME_LAT=50.8514
+HOME_LON=5.6910
 RADIUS_NM=10
 REFRESH_SECONDS=60
 MAXIMUM_DISTANCE_KM=20
