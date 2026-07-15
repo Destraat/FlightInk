@@ -199,8 +199,8 @@ When mDNS is unavailable, run `hostname -I` and use the Raspberry Pi IP address.
 ## Configuration
 
 ```env
-HOME_LAT=50.8514
-HOME_LON=5.6910
+HOME_LAT=----
+HOME_LON=----
 RADIUS_NM=10
 REFRESH_SECONDS=60
 MAXIMUM_DISTANCE_KM=20
