@@ -34,6 +34,13 @@ class Settings:
     local_adsb_timeout_seconds: int = 3
     airplanes_api_base: str = "https://api.airplanes.live/v2"
     weather_api_base: str = "https://api.open-meteo.com/v1/forecast"
+    opensky_routes_enabled: bool = True
+    opensky_api_base: str = "https://opensky-network.org/api"
+    opensky_token_url: str = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
+    opensky_client_id: str = ""
+    opensky_client_secret: str = ""
+    opensky_route_lookback_hours: int = 36
+    opensky_route_cache_seconds: int = 1800
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -69,6 +76,13 @@ class Settings:
             aircraft_source=os.getenv("AIRCRAFT_SOURCE", "hybrid").strip().lower(),
             local_adsb_url=os.getenv("LOCAL_ADSB_URL", "http://127.0.0.1:8080/data/aircraft.json").strip(),
             local_adsb_timeout_seconds=int(os.getenv("LOCAL_ADSB_TIMEOUT_SECONDS", "3")),
+            opensky_routes_enabled=os.getenv("OPENSKY_ROUTES_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"},
+            opensky_api_base=os.getenv("OPENSKY_API_BASE", "https://opensky-network.org/api").rstrip("/"),
+            opensky_token_url=os.getenv("OPENSKY_TOKEN_URL", "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token").strip(),
+            opensky_client_id=os.getenv("OPENSKY_CLIENT_ID", "").strip(),
+            opensky_client_secret=os.getenv("OPENSKY_CLIENT_SECRET", "").strip(),
+            opensky_route_lookback_hours=int(os.getenv("OPENSKY_ROUTE_LOOKBACK_HOURS", "36")),
+            opensky_route_cache_seconds=int(os.getenv("OPENSKY_ROUTE_CACHE_SECONDS", "1800")),
         )
         settings.validate()
         return settings
@@ -98,3 +112,9 @@ class Settings:
             raise ValueError("AIRCRAFT_SOURCE must be local, remote, or hybrid")
         if self.local_adsb_timeout_seconds < 1:
             raise ValueError("LOCAL_ADSB_TIMEOUT_SECONDS must be at least 1")
+        if not 1 <= self.opensky_route_lookback_hours <= 720:
+            raise ValueError("OPENSKY_ROUTE_LOOKBACK_HOURS must be between 1 and 720")
+        if self.opensky_route_cache_seconds < 60:
+            raise ValueError("OPENSKY_ROUTE_CACHE_SECONDS must be at least 60")
+        if bool(self.opensky_client_id) != bool(self.opensky_client_secret):
+            raise ValueError("OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET must be configured together")
