@@ -149,7 +149,13 @@ def main() -> None:
         settings = Settings(**{**settings.__dict__, "display_backend": "preview"})
     storage = Storage(settings.database_path, settings.cache_path)
     resolver = RouteResolver(storage)
-    display = create_display(settings.display_backend, settings.waveshare_module)
+    display = create_display(
+        settings.display_backend,
+        settings.waveshare_module,
+        transition_mode=settings.display_transition,
+        transition_steps=settings.transition_steps,
+        transition_delay_seconds=settings.transition_delay_seconds,
+    )
     session = create_session()
 
     signal.signal(signal.SIGINT, _stop)
