@@ -14,11 +14,14 @@ from flightink.config import Settings
 from flightink.display import Display, create_display
 from flightink.landmarks import draw_landmark
 from flightink.models import Aircraft, Weather
+from flightink.photo_display import active_aircraft_photo, install_photo_renderer
+from flightink.planespotters import AircraftPhoto, PlanespottersClient
 from flightink.prediction import PassagePrediction, predict_passage, selection_score
 from flightink.routes import RouteResolver
 from flightink.storage import Storage
 
 renderer_module._draw_landmark = draw_landmark
+install_photo_renderer(renderer_module)
 render_dashboard = renderer_module.render_dashboard
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -68,7 +71,32 @@ def _cached_weather(storage: Storage, max_age_seconds: int) -> Weather | None:
         return None
 
 
-def run_once(settings: Settings, storage: Storage, resolver: RouteResolver, display: Display, session: requests.Session) -> None:
+def _fetch_aircraft_photo(
+    aircraft: Aircraft | None,
+    photo_client: PlanespottersClient | None,
+) -> AircraftPhoto | None:
+    if aircraft is None or photo_client is None:
+        return None
+    try:
+        photo = photo_client.latest(aircraft.registration, aircraft.hex)
+        if photo and photo.image_path:
+            LOGGER.info("Using cached e-ink aircraft photo: %s", photo.image_path)
+        elif photo:
+            LOGGER.info("Planespotters metadata found; no local e-ink image available")
+        return photo
+    except (requests.RequestException, ValueError, TypeError):
+        LOGGER.warning("Planespotters photo lookup failed for %s", aircraft.registration or aircraft.hex, exc_info=True)
+        return None
+
+
+def run_once(
+    settings: Settings,
+    storage: Storage,
+    resolver: RouteResolver,
+    display: Display,
+    session: requests.Session,
+    photo_client: PlanespottersClient | None = None,
+) -> None:
     aircraft_list: list[Aircraft] = []
     weather: Weather | None = None
     aircraft_error = False
@@ -118,17 +146,19 @@ def run_once(settings: Settings, storage: Storage, resolver: RouteResolver, disp
     if selected and status == "live":
         storage.record_sighting(selected, route, prediction)
 
-    output = render_dashboard(
-        selected,
-        weather,
-        settings.output_path,
-        (settings.display_width, settings.display_height),
-        route=route,
-        stats=storage.stats_today(),
-        prediction=prediction,
-        status=status,
-        stale_minutes=stale_minutes,
-    )
+    photo = _fetch_aircraft_photo(selected, photo_client)
+    with active_aircraft_photo(photo):
+        output = render_dashboard(
+            selected,
+            weather,
+            settings.output_path,
+            (settings.display_width, settings.display_height),
+            route=route,
+            stats=storage.stats_today(),
+            prediction=prediction,
+            status=status,
+            stale_minutes=stale_minutes,
+        )
     changed = display.show(output)
     LOGGER.info("Display %s: %s", "updated" if changed else "unchanged", output)
 
@@ -148,6 +178,24 @@ def _run_adsb_test(settings: Settings, session: requests.Session) -> None:
         )
 
 
+def _create_photo_client(
+    settings: Settings,
+    storage: Storage,
+    session: requests.Session,
+) -> PlanespottersClient | None:
+    if settings.photo_provider != "planespotters":
+        return None
+    return PlanespottersClient(
+        storage,
+        user_agent=settings.planespotters_user_agent,
+        timeout_seconds=settings.request_timeout_seconds,
+        image_cache_enabled=settings.planespotters_image_cache_enabled,
+        image_cache_dir=settings.planespotters_image_cache_dir,
+        image_size=(settings.planespotters_image_width, settings.planespotters_image_height),
+        session=session,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="FlightInk e-ink flight display")
     parser.add_argument("--once", action="store_true", help="Render once and stop")
@@ -162,6 +210,7 @@ def main() -> None:
     storage = Storage(settings.database_path, settings.cache_path)
     session = create_session()
     resolver = RouteResolver(storage, settings, session)
+    photo_client = _create_photo_client(settings, storage, session)
     display = create_display(
         settings.display_backend,
         settings.waveshare_module,
@@ -182,7 +231,7 @@ def main() -> None:
             return
         while not _STOP:
             started = time.monotonic()
-            run_once(settings, storage, resolver, display, session)
+            run_once(settings, storage, resolver, display, session, photo_client)
             if args.once:
                 break
             time.sleep(max(1, settings.refresh_seconds - (time.monotonic() - started)))
