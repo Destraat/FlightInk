@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from flightink.config import Settings
 from flightink.models import Aircraft
 from flightink.routes import RouteResolver
 from flightink.storage import Storage
@@ -30,6 +31,7 @@ def test_cache_roundtrip(tmp_path: Path) -> None:
 
 def test_route_resolver_rejects_unverified_wildcard_guess(tmp_path: Path) -> None:
     storage = Storage(str(tmp_path / "flightink.db"), str(tmp_path / "cache.json"))
-    route = RouteResolver(storage).resolve("KLM14001")
+    settings = Settings(home_lat=0, home_lon=0, opensky_routes_enabled=False)
+    route = RouteResolver(storage, settings).resolve("KLM14001")
     assert route.destination is None
     assert route.label == "Route unknown"
