@@ -41,6 +41,12 @@ class Settings:
     opensky_client_secret: str = ""
     opensky_route_lookback_hours: int = 36
     opensky_route_cache_seconds: int = 1800
+    photo_provider: str = "none"
+    planespotters_user_agent: str = ""
+    planespotters_image_cache_enabled: bool = False
+    planespotters_image_cache_dir: str = "data/aircraft_photos"
+    planespotters_image_width: int = 470
+    planespotters_image_height: int = 190
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -83,6 +89,12 @@ class Settings:
             opensky_client_secret=os.getenv("OPENSKY_CLIENT_SECRET", "").strip(),
             opensky_route_lookback_hours=int(os.getenv("OPENSKY_ROUTE_LOOKBACK_HOURS", "36")),
             opensky_route_cache_seconds=int(os.getenv("OPENSKY_ROUTE_CACHE_SECONDS", "1800")),
+            photo_provider=os.getenv("PHOTO_PROVIDER", "none").strip().lower(),
+            planespotters_user_agent=os.getenv("PLANESPOTTERS_USER_AGENT", "").strip(),
+            planespotters_image_cache_enabled=os.getenv("PLANESPOTTERS_IMAGE_CACHE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
+            planespotters_image_cache_dir=os.getenv("PLANESPOTTERS_IMAGE_CACHE_DIR", "data/aircraft_photos").strip(),
+            planespotters_image_width=int(os.getenv("PLANESPOTTERS_IMAGE_WIDTH", "470")),
+            planespotters_image_height=int(os.getenv("PLANESPOTTERS_IMAGE_HEIGHT", "190")),
         )
         settings.validate()
         return settings
@@ -118,3 +130,13 @@ class Settings:
             raise ValueError("OPENSKY_ROUTE_CACHE_SECONDS must be at least 60")
         if bool(self.opensky_client_id) != bool(self.opensky_client_secret):
             raise ValueError("OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET must be configured together")
+        if self.photo_provider not in {"none", "planespotters"}:
+            raise ValueError("PHOTO_PROVIDER must be none or planespotters")
+        if self.photo_provider == "planespotters" and not self.planespotters_user_agent:
+            raise ValueError("PLANESPOTTERS_USER_AGENT is required when Planespotters photos are enabled")
+        if self.planespotters_image_cache_enabled and self.photo_provider != "planespotters":
+            raise ValueError("PLANESPOTTERS_IMAGE_CACHE_ENABLED requires PHOTO_PROVIDER=planespotters")
+        if not 100 <= self.planespotters_image_width <= 800:
+            raise ValueError("PLANESPOTTERS_IMAGE_WIDTH must be between 100 and 800")
+        if not 80 <= self.planespotters_image_height <= 400:
+            raise ValueError("PLANESPOTTERS_IMAGE_HEIGHT must be between 80 and 400")
