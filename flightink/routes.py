@@ -172,28 +172,92 @@ class RouteResolver:
         if not candidates:
             return Route()
 
-        best = max(candidates, key=lambda item: self._flight_score(item, callsign, now))
-        origin = best.get("estDepartureAirport")
-        destination = best.get("estArrivalAirport")
-        if not origin and not destination:
+        best = self._best_flight(candidates, icao24, callsign, now)
+        if not best:
             return Route()
 
-        return self._build_route(
-            origin,
-            destination,
+        route = self._build_route(
+            best.get("estDepartureAirport"),
+            best.get("estArrivalAirport"),
             source="opensky_aircraft_flights",
+            verified_at=str(best.get("lastSeen") or best.get("firstSeen") or now),
+        )
+        if route.origin and route.destination:
+            return route
+
+        origin = str(best.get("estDepartureAirport") or "").strip().upper()
+        destination = str(best.get("estArrivalAirport") or "").strip().upper()
+        if origin and not destination:
+            fallback = self._resolve_opensky_airport_flights("departure", origin, icao24, callsign, now, headers, int(best.get("firstSeen") or now))
+            return self._merge_routes(fallback, route)
+        if destination and not origin:
+            fallback = self._resolve_opensky_airport_flights("arrival", destination, icao24, callsign, now, headers, int(best.get("lastSeen") or now))
+            return self._merge_routes(fallback, route)
+        return route
+
+    def _resolve_opensky_airport_flights(
+        self,
+        endpoint: str,
+        airport: str,
+        icao24: str,
+        callsign: str,
+        now: int,
+        headers: dict[str, str],
+        reference_time: int,
+    ) -> Route:
+        window = 12 * 3600
+        begin = max(0, reference_time - window)
+        end = max(begin + 1, min(now + window, reference_time + window))
+        response = self.session.get(
+            f"{self.settings.opensky_api_base}/flights/{endpoint}",
+            params={"airport": airport, "begin": begin, "end": end},
+            headers=headers,
+            timeout=self.settings.request_timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, list):
+            return Route()
+        candidates = [item for item in payload if isinstance(item, dict)]
+        best = self._best_flight(candidates, icao24, callsign, now)
+        if not best:
+            return Route()
+        return self._build_route(
+            best.get("estDepartureAirport"),
+            best.get("estArrivalAirport"),
+            source=f"opensky_airport_{endpoint}",
             verified_at=str(best.get("lastSeen") or best.get("firstSeen") or now),
         )
 
     @staticmethod
-    def _flight_score(item: dict[str, Any], callsign: str, now: int) -> tuple[int, int, int, int]:
+    def _best_flight(candidates: list[dict[str, Any]], icao24: str, callsign: str, now: int) -> dict[str, Any] | None:
+        matching = [
+            item
+            for item in candidates
+            if (
+                (icao24 and re.sub(r"[^0-9a-f]", "", str(item.get("icao24") or "").lower()) == icao24)
+                or (
+                    callsign
+                    and re.sub(r"\s+", "", str(item.get("callsign") or "")).upper() == callsign
+                )
+            )
+        ]
+        pool = matching or candidates
+        if not pool:
+            return None
+        return max(pool, key=lambda item: RouteResolver._flight_score(item, callsign, now, icao24))
+
+    @staticmethod
+    def _flight_score(item: dict[str, Any], callsign: str, now: int, icao24: str = "") -> tuple[int, int, int, int, int]:
+        item_icao24 = re.sub(r"[^0-9a-f]", "", str(item.get("icao24") or "").lower())
+        icao24_score = 1 if icao24 and item_icao24 == icao24 else 0
         item_callsign = re.sub(r"\s+", "", str(item.get("callsign") or "")).upper()
         callsign_score = 1 if callsign and item_callsign == callsign else 0
         route_score = int(bool(item.get("estDepartureAirport"))) + int(bool(item.get("estArrivalAirport")))
         first_seen = int(item.get("firstSeen") or 0)
         last_seen = int(item.get("lastSeen") or 0)
         active_or_recent = 1 if first_seen <= now and (not last_seen or last_seen >= now - 12 * 3600) else 0
-        return callsign_score, route_score, active_or_recent, max(first_seen, last_seen)
+        return icao24_score, callsign_score, route_score, active_or_recent, max(first_seen, last_seen)
 
     def _build_route(
         self,

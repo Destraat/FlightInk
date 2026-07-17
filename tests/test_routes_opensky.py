@@ -29,13 +29,17 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, payload: Any) -> None:
+    def __init__(self, payload: Any, payloads_by_suffix: dict[str, Any] | None = None) -> None:
         self.payload = payload
+        self.payloads_by_suffix = payloads_by_suffix or {}
         self.get_calls: list[dict[str, Any]] = []
         self.post_calls: list[dict[str, Any]] = []
 
     def get(self, url: str, **kwargs: Any) -> FakeResponse:
         self.get_calls.append({"url": url, **kwargs})
+        for suffix, payload in self.payloads_by_suffix.items():
+            if url.endswith(suffix):
+                return FakeResponse(payload)
         return FakeResponse(self.payload)
 
     def post(self, url: str, **kwargs: Any) -> FakeResponse:
@@ -152,6 +156,44 @@ def test_partial_route_hints_are_completed_by_opensky() -> None:
     assert len(session.get_calls) == 1
 
 
+def test_airport_departure_fallback_completes_partial_aircraft_route() -> None:
+    session = FakeSession(
+        [],
+        payloads_by_suffix={
+            "/flights/aircraft": [
+                {
+                    "icao24": "486495",
+                    "callsign": "KLM59W",
+                    "firstSeen": 100,
+                    "lastSeen": 200,
+                    "estDepartureAirport": "EDDH",
+                    "estArrivalAirport": None,
+                }
+            ],
+            "/flights/departure": [
+                {
+                    "icao24": "486495",
+                    "callsign": "KLM59W",
+                    "firstSeen": 100,
+                    "lastSeen": 200,
+                    "estDepartureAirport": "EDDH",
+                    "estArrivalAirport": "EHAM",
+                }
+            ],
+        },
+    )
+    resolver = RouteResolver(FakeStorage(), settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("KLM59W", "486495", "PH-BQH")
+
+    assert route.origin == "HAM"
+    assert route.destination == "AMS"
+    assert route.destination_country == "NL"
+    assert route.landmark == "Westertoren"
+    assert route.source == "opensky_airport_departure"
+    assert [call["url"].rsplit("/", 1)[-1] for call in session.get_calls] == ["aircraft", "departure"]
+
+
 def test_partial_cached_route_does_not_block_complete_opensky_match() -> None:
     storage = FakeStorage()
     storage.values["route:opensky:484abc:KLM59W"] = {
@@ -179,6 +221,29 @@ def test_partial_cached_route_does_not_block_complete_opensky_match() -> None:
     assert route.origin == "HAM"
     assert route.destination == "AMS"
     assert len(session.get_calls) == 1
+
+
+def test_airport_fallback_prefers_matching_icao24() -> None:
+    resolver = RouteResolver(FakeStorage(), settings(), FakeSession([]))  # type: ignore[arg-type]
+    now = 10_000
+    exact_hex = {
+        "icao24": "486495",
+        "callsign": "KLM59W",
+        "firstSeen": 8_000,
+        "lastSeen": 8_900,
+        "estDepartureAirport": "EDDH",
+        "estArrivalAirport": "EHAM",
+    }
+    wrong_hex = {
+        "icao24": "486496",
+        "callsign": "KLM59W",
+        "firstSeen": 9_500,
+        "lastSeen": 9_900,
+        "estDepartureAirport": "EDDH",
+        "estArrivalAirport": "LFPG",
+    }
+
+    assert resolver._flight_score(exact_hex, "KLM59W", now, "486495") > resolver._flight_score(wrong_hex, "KLM59W", now, "486495")
 
 
 def test_more_complete_route_wins_over_newer_partial_match() -> None:
