@@ -65,26 +65,26 @@ class RouteResolver:
         normalized_icao24 = re.sub(r"[^0-9a-f]", "", (icao24 or "").lower())
 
         local = self._resolve_local(normalized_callsign)
-        if local.origin or local.destination:
-            return local
-
         hinted = self._resolve_hints(origin_hint, destination_hint)
-        if hinted.origin or hinted.destination:
-            return hinted
+        merged_local = self._merge_routes(local, hinted)
+        if merged_local.origin and merged_local.destination:
+            return merged_local
 
         if not self.settings.opensky_routes_enabled or len(normalized_icao24) != 6:
-            return Route()
+            return merged_local
 
         cache_key = f"route:opensky:{normalized_icao24}:{normalized_callsign or '-'}"
         cached = self.storage.get_cache(cache_key, self.settings.opensky_route_cache_seconds)
         if isinstance(cached, dict):
             try:
-                return Route(**cached)
+                cached_route = self._merge_routes(Route(**cached), merged_local)
             except TypeError:
-                pass
+                cached_route = Route()
+            if cached_route.origin and cached_route.destination:
+                return cached_route
 
         try:
-            route = self._resolve_opensky(normalized_icao24, normalized_callsign)
+            opensky = self._resolve_opensky(normalized_icao24, normalized_callsign)
         except requests.RequestException:
             LOGGER.warning(
                 "OpenSky route lookup failed for %s (%s)",
@@ -92,9 +92,11 @@ class RouteResolver:
                 normalized_callsign or "no callsign",
                 exc_info=True,
             )
-            return Route()
+            return merged_local
 
-        self.storage.set_cache(cache_key, asdict(route))
+        route = self._merge_routes(opensky, merged_local)
+        if route.origin or route.destination:
+            self.storage.set_cache(cache_key, asdict(route))
         return route
 
     def _resolve_hints(self, origin_hint: str | None, destination_hint: str | None) -> Route:
@@ -103,6 +105,25 @@ class RouteResolver:
         if not origin and not destination:
             return Route()
         return self._build_route(origin, destination, source="adsb_route_hint", verified_at=None)
+
+    def _merge_routes(self, primary: Route, fallback: Route) -> Route:
+        if not (primary.origin or primary.destination):
+            return fallback
+        if not (fallback.origin or fallback.destination):
+            return primary
+
+        destination = primary.destination or fallback.destination
+        source = primary.source
+        if not primary.destination and fallback.destination:
+            source = fallback.source
+        elif not primary.origin and fallback.origin and not destination:
+            source = fallback.source
+        return self._build_route(
+            primary.origin or fallback.origin,
+            destination,
+            source=source,
+            verified_at=primary.verified_at or fallback.verified_at,
+        )
 
     def _resolve_local(self, normalized_callsign: str) -> Route:
         if not normalized_callsign:

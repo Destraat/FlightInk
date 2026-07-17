@@ -129,6 +129,58 @@ def test_route_hints_fill_destination_without_opensky() -> None:
     assert session.get_calls == []
 
 
+def test_partial_route_hints_are_completed_by_opensky() -> None:
+    session = FakeSession([
+        {
+            "icao24": "484abc",
+            "callsign": "KLM59W",
+            "firstSeen": 100,
+            "lastSeen": 200,
+            "estDepartureAirport": "EDDH",
+            "estArrivalAirport": "EHAM",
+        }
+    ])
+    resolver = RouteResolver(FakeStorage(), settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("KLM59W", "484ABC", "PH-EXX", origin_hint="HAM", destination_hint="")
+
+    assert route.origin == "HAM"
+    assert route.destination == "AMS"
+    assert route.destination_country == "NL"
+    assert route.landmark == "Westertoren"
+    assert route.source == "opensky_aircraft_flights"
+    assert len(session.get_calls) == 1
+
+
+def test_partial_cached_route_does_not_block_complete_opensky_match() -> None:
+    storage = FakeStorage()
+    storage.values["route:opensky:484abc:KLM59W"] = {
+        "origin": "HAM",
+        "destination": None,
+        "destination_country": None,
+        "landmark": None,
+        "source": "opensky_aircraft_flights",
+        "verified_at": "100",
+    }
+    session = FakeSession([
+        {
+            "icao24": "484abc",
+            "callsign": "KLM59W",
+            "firstSeen": 100,
+            "lastSeen": 200,
+            "estDepartureAirport": "EDDH",
+            "estArrivalAirport": "EHAM",
+        }
+    ])
+    resolver = RouteResolver(storage, settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("KLM59W", "484ABC", "PH-EXX")
+
+    assert route.origin == "HAM"
+    assert route.destination == "AMS"
+    assert len(session.get_calls) == 1
+
+
 def test_more_complete_route_wins_over_newer_partial_match() -> None:
     resolver = RouteResolver(FakeStorage(), settings(), FakeSession([]))  # type: ignore[arg-type]
     now = 10_000
