@@ -63,7 +63,7 @@ def _draw_cached_photo(
         return False
 
     x1, y1, x2, _ = box
-    photo_box = (x1 + 16, y1 + 66, x2 - 10, y1 + 300)
+    photo_box = (x1 + 8, y1 + 58, x2 - 10, y1 + 326)
     width = photo_box[2] - photo_box[0]
     height = photo_box[3] - photo_box[1]
 

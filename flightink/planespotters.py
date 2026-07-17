@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import re
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -45,7 +46,7 @@ class PlanespottersClient:
         *,
         image_cache_enabled: bool = False,
         image_cache_dir: str | Path = "data/aircraft_photos",
-        image_size: tuple[int, int] = (492, 234),
+        image_size: tuple[int, int] = (500, 268),
         session: requests.Session | None = None,
     ) -> None:
         if not user_agent or "FlightInk" not in user_agent:
@@ -150,11 +151,65 @@ class PlanespottersClient:
             )
 
         grayscale = ImageOps.autocontrast(image.convert("L"), cutoff=2)
+        grayscale = PlanespottersClient._remove_bright_background(grayscale)
         grayscale = ImageEnhance.Contrast(grayscale).enhance(1.12)
         grayscale = ImageEnhance.Brightness(grayscale).enhance(1.03)
         grayscale = grayscale.filter(ImageFilter.GaussianBlur(radius=0.35))
         grayscale = ImageEnhance.Sharpness(grayscale).enhance(0.95)
         return grayscale
+
+    @staticmethod
+    def _remove_bright_background(image: Image.Image) -> Image.Image:
+        width, height = image.size
+        pixels = image.load()
+        border_values: list[int] = []
+        for x in range(width):
+            border_values.append(int(pixels[x, 0]))
+            border_values.append(int(pixels[x, height - 1]))
+        for y in range(1, height - 1):
+            border_values.append(int(pixels[0, y]))
+            border_values.append(int(pixels[width - 1, y]))
+
+        if not border_values:
+            return image
+
+        border_average = sum(border_values) / len(border_values)
+        threshold = max(160, min(245, int(border_average - 8)))
+        background = image.copy()
+        output = background.load()
+        visited = bytearray(width * height)
+        queue: deque[tuple[int, int]] = deque()
+
+        def push(x: int, y: int) -> None:
+            index = y * width + x
+            if visited[index]:
+                return
+            visited[index] = 1
+            if int(output[x, y]) >= threshold:
+                queue.append((x, y))
+
+        for x in range(width):
+            push(x, 0)
+            push(x, height - 1)
+        for y in range(1, height - 1):
+            push(0, y)
+            push(width - 1, y)
+
+        while queue:
+            x, y = queue.popleft()
+            if int(output[x, y]) < threshold:
+                continue
+            output[x, y] = 255
+            if x > 0:
+                push(x - 1, y)
+            if x + 1 < width:
+                push(x + 1, y)
+            if y > 0:
+                push(x, y - 1)
+            if y + 1 < height:
+                push(x, y + 1)
+
+        return background
 
     @staticmethod
     def _write_manifest(path: Path, photo: AircraftPhoto) -> None:

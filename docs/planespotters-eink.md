@@ -11,8 +11,8 @@ PHOTO_PROVIDER=planespotters
 PLANESPOTTERS_USER_AGENT=FlightInk/1.0 (+https://github.com/Destraat/FlightInk)
 PLANESPOTTERS_IMAGE_CACHE_ENABLED=true
 PLANESPOTTERS_IMAGE_CACHE_DIR=data/aircraft_photos
-PLANESPOTTERS_IMAGE_WIDTH=492
-PLANESPOTTERS_IMAGE_HEIGHT=234
+PLANESPOTTERS_IMAGE_WIDTH=500
+PLANESPOTTERS_IMAGE_HEIGHT=268
 ```
 
 The user agent must remain unique and descriptive and should include a contact URL or email.

@@ -72,7 +72,7 @@ def test_registration_then_hex_fallback_downloads_and_prepares(tmp_path: Path) -
     assert photo is not None
     assert photo.image_path is not None
     assert Path(photo.image_path).exists()
-    assert Image.open(photo.image_path).size == (492, 234)
+    assert Image.open(photo.image_path).size == (500, 268)
     assert "/reg/PH-BXA" in session.calls[0][0]
     assert "/hex/484001" in session.calls[1][0]
 
@@ -82,16 +82,29 @@ def test_prepare_eink_image_fills_target_without_white_side_bars() -> None:
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG")
 
-    prepared = PlanespottersClient.prepare_eink_image(buffer.getvalue(), (492, 234))
+    prepared = PlanespottersClient.prepare_eink_image(buffer.getvalue(), (500, 268))
 
-    assert prepared.size == (492, 234)
-    assert prepared.getpixel((0, 117)) < 40
-    assert prepared.getpixel((491, 117)) < 40
+    assert prepared.size == (500, 268)
+    assert prepared.getpixel((0, 134)) < 40
+    assert prepared.getpixel((499, 134)) < 40
+
+
+def test_prepare_eink_image_removes_bright_background() -> None:
+    image = Image.new("RGB", (420, 280), (210, 210, 210))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((80, 110, 340, 170), fill=(45, 45, 45))
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG")
+
+    prepared = PlanespottersClient.prepare_eink_image(buffer.getvalue(), (500, 268))
+
+    assert prepared.getpixel((10, 10)) > 240
+    assert prepared.getpixel((250, 140)) < 120
 
 
 def test_cached_photo_is_drawn_on_frame(tmp_path: Path) -> None:
     photo_path = tmp_path / "photo.png"
-    Image.new("L", (492, 234), 120).save(photo_path)
+    Image.new("L", (500, 268), 120).save(photo_path)
     canvas = Image.new("L", (800, 480), 245)
     draw = ImageDraw.Draw(canvas)
     fonts = {"small_bold": ImageFont.load_default(), "tiny": ImageFont.load_default()}
@@ -111,7 +124,7 @@ def test_offline_request_reuses_local_processed_photo(tmp_path: Path) -> None:
     photo_dir = tmp_path / "photos"
     photo_dir.mkdir()
     image_path = photo_dir / "reg-PH-BXA.png"
-    Image.new("L", (492, 234), 180).save(image_path)
+    Image.new("L", (500, 268), 180).save(image_path)
     image_path.with_suffix(".json").write_text(
         '{"thumbnail_url":"https://cdn.example/photo.jpg","link_url":"https://www.planespotters.net/photo/1/example","photographer":"Jane Doe"}',
         encoding="utf-8",
