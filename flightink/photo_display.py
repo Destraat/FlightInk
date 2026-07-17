@@ -69,10 +69,15 @@ def _draw_cached_photo(
 
     try:
         with Image.open(path) as source:
-            image = ImageOps.contain(source.convert("L"), (width - 8, height - 8), Image.Resampling.LANCZOS)
-            canvas = Image.new("L", (width, height), 248)
-            offset = ((width - image.width) // 2, (height - image.height) // 2)
-            canvas.paste(image, offset)
+            if source.size == (width, height):
+                canvas = source.convert("L")
+            else:
+                canvas = ImageOps.fit(
+                    source.convert("L"),
+                    (width, height),
+                    method=Image.Resampling.LANCZOS,
+                    centering=(0.5, 0.42),
+                )
     except (OSError, ValueError):
         LOGGER.warning("Could not render cached aircraft photo %s", path, exc_info=True)
         return False

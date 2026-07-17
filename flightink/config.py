@@ -45,8 +45,8 @@ class Settings:
     planespotters_user_agent: str = ""
     planespotters_image_cache_enabled: bool = False
     planespotters_image_cache_dir: str = "data/aircraft_photos"
-    planespotters_image_width: int = 470
-    planespotters_image_height: int = 190
+    planespotters_image_width: int = 492
+    planespotters_image_height: int = 234
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -93,8 +93,8 @@ class Settings:
             planespotters_user_agent=os.getenv("PLANESPOTTERS_USER_AGENT", "").strip(),
             planespotters_image_cache_enabled=os.getenv("PLANESPOTTERS_IMAGE_CACHE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
             planespotters_image_cache_dir=os.getenv("PLANESPOTTERS_IMAGE_CACHE_DIR", "data/aircraft_photos").strip(),
-            planespotters_image_width=int(os.getenv("PLANESPOTTERS_IMAGE_WIDTH", "470")),
-            planespotters_image_height=int(os.getenv("PLANESPOTTERS_IMAGE_HEIGHT", "190")),
+            planespotters_image_width=int(os.getenv("PLANESPOTTERS_IMAGE_WIDTH", "492")),
+            planespotters_image_height=int(os.getenv("PLANESPOTTERS_IMAGE_HEIGHT", "234")),
         )
         settings.validate()
         return settings

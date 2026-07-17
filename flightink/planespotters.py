@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import quote
 
 import requests
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 from .storage import Storage
 
@@ -45,7 +45,7 @@ class PlanespottersClient:
         *,
         image_cache_enabled: bool = False,
         image_cache_dir: str | Path = "data/aircraft_photos",
-        image_size: tuple[int, int] = (470, 190),
+        image_size: tuple[int, int] = (492, 234),
         session: requests.Session | None = None,
     ) -> None:
         if not user_agent or "FlightInk" not in user_agent:
@@ -142,15 +142,18 @@ class PlanespottersClient:
     def prepare_eink_image(image_data: bytes, size: tuple[int, int]) -> Image.Image:
         with Image.open(io.BytesIO(image_data)) as source:
             image = ImageOps.exif_transpose(source).convert("RGB")
-            image = ImageOps.contain(image, size, method=Image.Resampling.LANCZOS)
+            image = ImageOps.fit(
+                image,
+                size,
+                method=Image.Resampling.LANCZOS,
+                centering=(0.5, 0.42),
+            )
 
-            canvas = Image.new("RGB", size, "white")
-            offset = ((size[0] - image.width) // 2, (size[1] - image.height) // 2)
-            canvas.paste(image, offset)
-
-        grayscale = ImageOps.autocontrast(canvas.convert("L"), cutoff=1)
-        grayscale = ImageEnhance.Contrast(grayscale).enhance(1.35)
-        grayscale = ImageEnhance.Sharpness(grayscale).enhance(1.15)
+        grayscale = ImageOps.autocontrast(image.convert("L"), cutoff=2)
+        grayscale = ImageEnhance.Contrast(grayscale).enhance(1.12)
+        grayscale = ImageEnhance.Brightness(grayscale).enhance(1.03)
+        grayscale = grayscale.filter(ImageFilter.GaussianBlur(radius=0.35))
+        grayscale = ImageEnhance.Sharpness(grayscale).enhance(0.95)
         return grayscale
 
     @staticmethod
