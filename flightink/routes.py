@@ -94,11 +94,7 @@ class RouteResolver:
             )
             return Route()
 
-        if route.origin or route.destination:
-            self.storage.set_cache(cache_key, asdict(route))
-        else:
-            # Short negative cache avoids hammering OpenSky for an unresolved live flight.
-            self.storage.set_cache(cache_key, asdict(route))
+        self.storage.set_cache(cache_key, asdict(route))
         return route
 
     def _resolve_hints(self, origin_hint: str | None, destination_hint: str | None) -> Route:

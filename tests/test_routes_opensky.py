@@ -32,12 +32,14 @@ class FakeSession:
     def __init__(self, payload: Any) -> None:
         self.payload = payload
         self.get_calls: list[dict[str, Any]] = []
+        self.post_calls: list[dict[str, Any]] = []
 
     def get(self, url: str, **kwargs: Any) -> FakeResponse:
         self.get_calls.append({"url": url, **kwargs})
         return FakeResponse(self.payload)
 
     def post(self, url: str, **kwargs: Any) -> FakeResponse:
+        self.post_calls.append({"url": url, **kwargs})
         return FakeResponse({"access_token": "test-token", "expires_in": 300})
 
 
@@ -125,3 +127,26 @@ def test_route_hints_fill_destination_without_opensky() -> None:
     assert route.landmark == "Sagrada Família"
     assert route.source == "adsb_route_hint"
     assert session.get_calls == []
+
+
+def test_opensky_uses_bearer_token_when_credentials_exist() -> None:
+    session = FakeSession([
+        {
+            "icao24": "300000",
+            "callsign": "ITY112",
+            "firstSeen": 100,
+            "lastSeen": 200,
+            "estDepartureAirport": "LIML",
+            "estArrivalAirport": "EHAM",
+        }
+    ])
+    resolver = RouteResolver(
+        FakeStorage(),
+        settings(opensky_client_id="client-id", opensky_client_secret="client-secret"),
+        session,  # type: ignore[arg-type]
+    )
+
+    resolver.resolve("ITY112", "300000", "EI-XYZ")
+
+    assert session.post_calls
+    assert session.get_calls[0]["headers"]["Authorization"] == "Bearer test-token"
