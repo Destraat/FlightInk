@@ -303,9 +303,10 @@ def _draw_flight_card(
 def _draw_panel_placeholder(draw: ImageDraw.ImageDraw, fonts: dict[str, ImageFont.ImageFont], box: tuple[int, int, int, int]) -> None:
     x1, y1, x2, y2 = box
     draw.rounded_rectangle((x1, y1, x2, y2), radius=8, outline=105, width=1, fill=248)
-    draw.text((x1 + 14, y1 + 20), "WACHT OP VLUCHT", font=fonts["small_bold"], fill=45)
-    draw.text((x1 + 14, y1 + 42), "Geen toestel in bereik.", font=fonts["small"], fill=70)
-    draw.rectangle((x1 + 12, y1 + 76, x2 - 12, y2 - 12), outline=150, width=1)
+    draw.text((x1 + 14, y1 + 18), "WACHT OP VLUCHT", font=fonts["small_bold"], fill=45)
+    draw.text((x1 + 14, y1 + 48), "Geen toestel", font=fonts["small"], fill=70)
+    draw.text((x1 + 14, y1 + 62), "in bereik.", font=fonts["small"], fill=70)
+    draw.rectangle((x1 + 12, y1 + 92, x2 - 12, y2 - 12), outline=150, width=1)
 
 
 def _draw_empty_state(
