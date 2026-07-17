@@ -129,6 +129,27 @@ def test_route_hints_fill_destination_without_opensky() -> None:
     assert session.get_calls == []
 
 
+def test_more_complete_route_wins_over_newer_partial_match() -> None:
+    resolver = RouteResolver(FakeStorage(), settings(), FakeSession([]))  # type: ignore[arg-type]
+    now = 10_000
+    complete = {
+        "callsign": "BTI98R",
+        "firstSeen": 8_000,
+        "lastSeen": 8_900,
+        "estDepartureAirport": "EBBR",
+        "estArrivalAirport": "EVRA",
+    }
+    partial_newer = {
+        "callsign": "BTI98R",
+        "firstSeen": 9_500,
+        "lastSeen": 9_900,
+        "estDepartureAirport": "EBBR",
+        "estArrivalAirport": None,
+    }
+
+    assert resolver._flight_score(complete, "BTI98R", now) > resolver._flight_score(partial_newer, "BTI98R", now)
+
+
 def test_opensky_uses_bearer_token_when_credentials_exist() -> None:
     session = FakeSession([
         {

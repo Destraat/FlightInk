@@ -172,7 +172,7 @@ class RouteResolver:
         first_seen = int(item.get("firstSeen") or 0)
         last_seen = int(item.get("lastSeen") or 0)
         active_or_recent = 1 if first_seen <= now and (not last_seen or last_seen >= now - 12 * 3600) else 0
-        return callsign_score, active_or_recent, route_score, max(first_seen, last_seen)
+        return callsign_score, route_score, active_or_recent, max(first_seen, last_seen)
 
     def _build_route(
         self,
