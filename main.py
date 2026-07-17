@@ -139,6 +139,8 @@ def run_once(
             callsign=selected.callsign,
             icao24=selected.hex,
             registration=selected.registration,
+            origin_hint=selected.origin_airport,
+            destination_hint=selected.destination_airport,
         )
         if selected
         else None

@@ -58,6 +58,8 @@ class RouteResolver:
         callsign: str,
         icao24: str | None = None,
         registration: str | None = None,
+        origin_hint: str | None = None,
+        destination_hint: str | None = None,
     ) -> Route:
         normalized_callsign = re.sub(r"\s+", "", callsign or "").upper()
         normalized_icao24 = re.sub(r"[^0-9a-f]", "", (icao24 or "").lower())
@@ -65,6 +67,10 @@ class RouteResolver:
         local = self._resolve_local(normalized_callsign)
         if local.origin or local.destination:
             return local
+
+        hinted = self._resolve_hints(origin_hint, destination_hint)
+        if hinted.origin or hinted.destination:
+            return hinted
 
         if not self.settings.opensky_routes_enabled or len(normalized_icao24) != 6:
             return Route()
@@ -94,6 +100,13 @@ class RouteResolver:
             # Short negative cache avoids hammering OpenSky for an unresolved live flight.
             self.storage.set_cache(cache_key, asdict(route))
         return route
+
+    def _resolve_hints(self, origin_hint: str | None, destination_hint: str | None) -> Route:
+        origin = self._display_airport(origin_hint)
+        destination = self._display_airport(destination_hint)
+        if not origin and not destination:
+            return Route()
+        return self._build_route(origin, destination, source="adsb_route_hint", verified_at=None)
 
     def _resolve_local(self, normalized_callsign: str) -> Route:
         if not normalized_callsign:

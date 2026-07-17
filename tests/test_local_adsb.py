@@ -48,6 +48,18 @@ def test_parses_dump1090_aircraft_json():
     assert aircraft[0].type_code == "B738"
 
 
+def test_parses_route_hints_from_feed() -> None:
+    session = FakeSession({"aircraft": [{
+        "hex": "484abc", "flight": "KLM123 ", "lat": 52.01, "lon": 5.01,
+        "alt_baro": 12000, "gs": 410, "track": 95, "r": "PH-ABC", "t": "B738",
+        "route": "AMS-BCN",
+    }]})
+    aircraft = fetch_local_aircraft(settings(), session)
+    assert len(aircraft) == 1
+    assert aircraft[0].origin_airport == "AMS"
+    assert aircraft[0].destination_airport == "BCN"
+
+
 def test_hybrid_uses_local_feed_when_available():
     session = FakeSession({"aircraft": [{
         "hex": "484abc", "flight": "TRA456", "lat": 52.01, "lon": 5.01,

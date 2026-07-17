@@ -103,6 +103,7 @@ def _parse_aircraft(raw_aircraft: list[dict[str, Any]], settings: Settings) -> l
             continue
         if distance > settings.maximum_distance_km:
             continue
+        origin_airport, destination_airport = _route_hints(raw)
         result.append(
             Aircraft(
                 hex=str(raw.get("hex", raw.get("icao", ""))).strip().lower(),
@@ -115,6 +116,8 @@ def _parse_aircraft(raw_aircraft: list[dict[str, Any]], settings: Settings) -> l
                 speed_knots=_to_float(raw.get("gs", raw.get("speed"))),
                 track=_to_float(raw.get("track", raw.get("heading"))),
                 distance_km=distance,
+                origin_airport=origin_airport,
+                destination_airport=destination_airport,
             )
         )
     return sorted(result, key=_selection_score)
@@ -150,6 +153,50 @@ def _altitude(raw: dict[str, Any]) -> float | None:
 def _selection_score(aircraft: Aircraft) -> tuple[float, float]:
     completeness_penalty = 0.0 if aircraft.callsign and aircraft.type_code else 0.75
     return aircraft.distance_km + completeness_penalty, -(aircraft.altitude_ft or 0.0)
+
+
+def _route_hints(raw: dict[str, Any]) -> tuple[str, str]:
+    origin = _normalize_airport_code(
+        raw.get("origin")
+        or raw.get("from")
+        or raw.get("dep")
+        or raw.get("estDepartureAirport")
+        or raw.get("origin_airport")
+    )
+    destination = _normalize_airport_code(
+        raw.get("destination")
+        or raw.get("to")
+        or raw.get("arr")
+        or raw.get("estArrivalAirport")
+        or raw.get("destination_airport")
+    )
+
+    if origin and destination:
+        return origin, destination
+
+    route_value = str(raw.get("route") or raw.get("route_hint") or "").strip().upper()
+    if route_value:
+        parsed_origin, parsed_destination = _split_route(route_value)
+        origin = origin or parsed_origin
+        destination = destination or parsed_destination
+    return origin, destination
+
+
+def _split_route(value: str) -> tuple[str, str]:
+    normalized = value.replace(">", "-").replace("/", "-").replace(" ", "")
+    for separator in ("-",):
+        if separator in normalized:
+            left, right = normalized.split(separator, 1)
+            return _normalize_airport_code(left), _normalize_airport_code(right)
+    return "", ""
+
+
+def _normalize_airport_code(value: Any) -> str:
+    code = str(value or "").strip().upper()
+    if not code:
+        return ""
+    code = "".join(ch for ch in code if ch.isalnum())
+    return code if len(code) in {3, 4} else ""
 
 
 def _to_float(value: Any) -> float | None:

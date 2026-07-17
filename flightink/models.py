@@ -17,6 +17,8 @@ class Aircraft:
     speed_knots: float | None
     track: float | None
     distance_km: float
+    origin_airport: str = ""
+    destination_airport: str = ""
 
     @property
     def airline_code(self) -> str:

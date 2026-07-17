@@ -111,3 +111,17 @@ def test_callsign_match_is_preferred_over_newer_other_flight() -> None:
     }
 
     assert resolver._flight_score(matching, "KLM1234", now) > resolver._flight_score(newer_other, "KLM1234", now)
+
+
+def test_route_hints_fill_destination_without_opensky() -> None:
+    session = FakeSession([])
+    resolver = RouteResolver(FakeStorage(), settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("KLM1234", "4855d2", "PH-EXX", origin_hint="AMS", destination_hint="BCN")
+
+    assert route.origin == "AMS"
+    assert route.destination == "BCN"
+    assert route.destination_country == "ES"
+    assert route.landmark == "Sagrada Família"
+    assert route.source == "adsb_route_hint"
+    assert session.get_calls == []
