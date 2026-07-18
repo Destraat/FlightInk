@@ -205,9 +205,12 @@ class RouteResolver:
         headers: dict[str, str],
         reference_time: int,
     ) -> Route:
-        window = 12 * 3600
-        begin = max(0, reference_time - window)
-        end = max(begin + 1, min(now + window, reference_time + window))
+        # OpenSky airport endpoints support up to a 2-day interval. Query the
+        # full recent window to recover routes that were not yet complete in
+        # the newest aircraft-flight record.
+        _ = reference_time
+        begin = max(0, now - 48 * 3600)
+        end = now
         response = self.session.get(
             f"{self.settings.opensky_api_base}/flights/{endpoint}",
             params={"airport": airport, "begin": begin, "end": end},

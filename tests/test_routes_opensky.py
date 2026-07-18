@@ -192,6 +192,10 @@ def test_airport_departure_fallback_completes_partial_aircraft_route() -> None:
     assert route.landmark == "Westertoren"
     assert route.source == "opensky_airport_departure"
     assert [call["url"].rsplit("/", 1)[-1] for call in session.get_calls] == ["aircraft", "departure"]
+    departure_params = session.get_calls[1]["params"]
+    assert departure_params["airport"] == "EDDH"
+    assert departure_params["end"] >= departure_params["begin"]
+    assert departure_params["end"] - departure_params["begin"] == 48 * 3600
 
 
 def test_partial_cached_route_does_not_block_complete_opensky_match() -> None:
