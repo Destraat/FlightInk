@@ -42,6 +42,12 @@ def _select_aircraft(aircraft: list[Aircraft], settings: Settings) -> tuple[Airc
     return ranked[0]
 
 
+def _ranked_aircraft(aircraft: list[Aircraft], settings: Settings) -> list[tuple[Aircraft, PassagePrediction]]:
+    ranked = [(item, predict_passage(item, settings.home_lat, settings.home_lon)) for item in aircraft]
+    ranked.sort(key=lambda pair: selection_score(pair[0], pair[1]))
+    return ranked
+
+
 def _cache_live_state(storage: Storage, aircraft: Aircraft | None, weather: Weather | None) -> None:
     now = int(time.time())
     if aircraft:
@@ -118,7 +124,8 @@ def run_once(
         LOGGER.exception("Weather data retrieval failed")
         weather = _cached_weather(storage, settings.stale_weather_seconds)
 
-    selected, prediction = _select_aircraft(aircraft_list, settings)
+    ranked_live = _ranked_aircraft(aircraft_list, settings) if aircraft_list else []
+    selected, prediction = ranked_live[0] if ranked_live else (None, None)
     stale_minutes: int | None = None
     status = "live"
 
@@ -145,6 +152,20 @@ def run_once(
         if selected
         else None
     )
+    if selected and route and status == "live" and not route.destination:
+        for candidate, candidate_prediction in ranked_live[1:6]:
+            candidate_route = resolver.resolve(
+                callsign=candidate.callsign,
+                icao24=candidate.hex,
+                registration=candidate.registration,
+                origin_hint=candidate.origin_airport,
+                destination_hint=candidate.destination_airport,
+            )
+            if candidate_route.destination:
+                selected = candidate
+                prediction = candidate_prediction
+                route = candidate_route
+                break
     if selected and status == "live":
         storage.record_sighting(selected, route, prediction)
 
