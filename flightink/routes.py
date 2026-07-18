@@ -188,10 +188,18 @@ class RouteResolver:
         origin = str(best.get("estDepartureAirport") or "").strip().upper()
         destination = str(best.get("estArrivalAirport") or "").strip().upper()
         if origin and not destination:
-            fallback = self._resolve_opensky_airport_flights("departure", origin, icao24, callsign, now, headers, int(best.get("firstSeen") or now))
+            try:
+                fallback = self._resolve_opensky_airport_flights("departure", origin, icao24, callsign, now, headers, int(best.get("firstSeen") or now))
+            except requests.RequestException:
+                LOGGER.info("OpenSky departure fallback failed for %s (%s)", origin, icao24, exc_info=True)
+                return route
             return self._merge_routes(fallback, route)
         if destination and not origin:
-            fallback = self._resolve_opensky_airport_flights("arrival", destination, icao24, callsign, now, headers, int(best.get("lastSeen") or now))
+            try:
+                fallback = self._resolve_opensky_airport_flights("arrival", destination, icao24, callsign, now, headers, int(best.get("lastSeen") or now))
+            except requests.RequestException:
+                LOGGER.info("OpenSky arrival fallback failed for %s (%s)", destination, icao24, exc_info=True)
+                return route
             return self._merge_routes(fallback, route)
         return route
 
@@ -209,7 +217,7 @@ class RouteResolver:
         # full recent window to recover routes that were not yet complete in
         # the newest aircraft-flight record.
         _ = reference_time
-        begin = max(0, now - 48 * 3600)
+        begin = max(0, now - ((48 * 3600) - 1))
         end = now
         response = self.session.get(
             f"{self.settings.opensky_api_base}/flights/{endpoint}",

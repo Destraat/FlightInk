@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import requests
+
 from flightink.config import Settings
 from flightink.routes import RouteResolver
 
@@ -39,6 +41,8 @@ class FakeSession:
         self.get_calls.append({"url": url, **kwargs})
         for suffix, payload in self.payloads_by_suffix.items():
             if url.endswith(suffix):
+                if isinstance(payload, Exception):
+                    raise payload
                 return FakeResponse(payload)
         return FakeResponse(self.payload)
 
@@ -195,7 +199,7 @@ def test_airport_departure_fallback_completes_partial_aircraft_route() -> None:
     departure_params = session.get_calls[1]["params"]
     assert departure_params["airport"] == "EDDH"
     assert departure_params["end"] >= departure_params["begin"]
-    assert departure_params["end"] - departure_params["begin"] == 48 * 3600
+    assert departure_params["end"] - departure_params["begin"] == (48 * 3600) - 1
 
 
 def test_partial_cached_route_does_not_block_complete_opensky_match() -> None:
@@ -248,6 +252,32 @@ def test_airport_fallback_prefers_matching_icao24() -> None:
     }
 
     assert resolver._flight_score(exact_hex, "KLM59W", now, "486495") > resolver._flight_score(wrong_hex, "KLM59W", now, "486495")
+
+
+def test_airport_fallback_http_error_keeps_partial_route() -> None:
+    session = FakeSession(
+        [],
+        payloads_by_suffix={
+            "/flights/aircraft": [
+                {
+                    "icao24": "486495",
+                    "callsign": "KLM74N",
+                    "firstSeen": 100,
+                    "lastSeen": 200,
+                    "estDepartureAirport": "LIPE",
+                    "estArrivalAirport": None,
+                }
+            ],
+            "/flights/departure": requests.HTTPError("400 Client Error"),
+        },
+    )
+    resolver = RouteResolver(FakeStorage(), settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("KLM74N", "486495", "PH-BQH")
+
+    assert route.origin == "LIPE"
+    assert route.destination is None
+    assert route.source == "opensky_aircraft_flights"
 
 
 def test_more_complete_route_wins_over_newer_partial_match() -> None:
