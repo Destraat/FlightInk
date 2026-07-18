@@ -280,6 +280,54 @@ def test_airport_fallback_http_error_keeps_partial_route() -> None:
     assert route.source == "opensky_aircraft_flights"
 
 
+def test_last_known_route_keeps_departure_when_live_lookup_fails() -> None:
+    storage = FakeStorage()
+    storage.values["route:last_known:486495"] = {
+        "origin": "HAM",
+        "destination": "AMS",
+        "destination_country": "NL",
+        "landmark": "Westertoren",
+        "source": "opensky_aircraft_flights",
+        "verified_at": "1784312357",
+    }
+    session = FakeSession([], payloads_by_suffix={"/flights/aircraft": requests.HTTPError("boom")})
+    resolver = RouteResolver(storage, settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("KLM74N", "486495", "PH-BQH")
+
+    assert route.origin == "HAM"
+    assert route.destination == "AMS"
+    assert route.source == "opensky_aircraft_flights"
+
+
+def test_last_known_route_fills_missing_departure() -> None:
+    storage = FakeStorage()
+    storage.values["route:last_known:486495"] = {
+        "origin": "HAM",
+        "destination": "AMS",
+        "destination_country": "NL",
+        "landmark": "Westertoren",
+        "source": "opensky_aircraft_flights",
+        "verified_at": "1784312357",
+    }
+    session = FakeSession([
+        {
+            "icao24": "486495",
+            "callsign": "KLM74N",
+            "firstSeen": 100,
+            "lastSeen": 200,
+            "estDepartureAirport": None,
+            "estArrivalAirport": "LIPE",
+        }
+    ])
+    resolver = RouteResolver(storage, settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("KLM74N", "486495", "PH-BQH")
+
+    assert route.origin == "HAM"
+    assert route.destination == "LIPE"
+
+
 def test_more_complete_route_wins_over_newer_partial_match() -> None:
     resolver = RouteResolver(FakeStorage(), settings(), FakeSession([]))  # type: ignore[arg-type]
     now = 10_000
