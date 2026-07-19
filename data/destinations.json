@@ -2,6 +2,7 @@
   "AMS": {"city": "Amsterdam", "country": "NL", "landmark": "Westertoren"},
   "ANR": {"city": "Antwerpen", "country": "BE", "landmark": "Onze-Lieve-Vrouwekathedraal"},
   "BFS": {"city": "Belfast", "country": "GB", "landmark": "Titanic Belfast"},
+  "EHTE": {"city": "Teuge", "country": "NL", "landmark": "Paleis Het Loo"},
   "CDG": {"city": "Parijs", "country": "FR", "landmark": "Eiffeltoren"},
   "BCN": {"city": "Barcelona", "country": "ES", "landmark": "Sagrada Família"},
   "BRU": {"city": "Brussel", "country": "BE", "landmark": "Atomium"},

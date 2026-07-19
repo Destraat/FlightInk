@@ -566,6 +566,7 @@ def _city_for_code(code: str | None) -> str:
         "BUD": "Boedapest",
         "CDG": "Parijs",
         "DOH": "Doha",
+        "EHTE": "Teuge",
         "LHR": "Londen",
         "FRA": "Frankfurt",
         "CPH": "Kopenhagen",
