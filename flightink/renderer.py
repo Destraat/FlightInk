@@ -13,6 +13,7 @@ from .models import Aircraft, Weather, aircraft_name
 from .prediction import PassagePrediction
 
 DESTINATIONS_FILE = Path(__file__).resolve().parent.parent / "data" / "destinations.json"
+_draw_landmark: Any | None = None
 
 
 AIRCRAFT_ASSETS: dict[str, dict[str, object]] = {
@@ -398,6 +399,11 @@ def _draw_flag(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int, code: 
 
 def _draw_landmark_asset(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], landmark: str) -> None:
     x1, y1, x2, y2 = box
+    custom_drawer = _draw_landmark
+    if callable(custom_drawer):
+        custom_drawer(draw, x1, y1, x2, y2, landmark)
+        return
+
     draw.rectangle((x1, y1, x2, y2), outline=132, width=1, fill=244)
     for xx in range(x1 + 2, x2 - 2, 9):
         draw.line((xx, y2 - 4, xx + 4, y2 - 4), fill=214, width=1)

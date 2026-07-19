@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PIL import Image
 
+import flightink.renderer as renderer_module
 from flightink.models import Aircraft, Weather
 from flightink.prediction import PassagePrediction
 from flightink.renderer import render_dashboard
@@ -46,3 +47,33 @@ def test_render_dashboard_handles_empty_state(tmp_path: Path) -> None:
 
     assert path == output
     assert output.exists()
+
+
+def test_render_dashboard_uses_custom_landmark_drawer(tmp_path: Path) -> None:
+    output = tmp_path / "custom-landmark.png"
+    aircraft = Aircraft("484506", "KLM1287", "PH-BVA", "B738", 52.12, 5.12, 35600, 445, 162, 1.9)
+    weather = Weather(16.2, 32, 2, 21.0, 130)
+    route = Route(origin="AMS", destination="BCN", destination_country="ES", landmark="Sagrada Familia")
+    prediction = PassagePrediction(1.4, 32, True)
+    calls: list[str] = []
+
+    def custom(draw, x1, y1, x2, y2, landmark):  # type: ignore[no-untyped-def]
+        calls.append(landmark)
+        draw.rectangle((x1, y1, x2, y2), fill=0)
+
+    original = renderer_module._draw_landmark
+    renderer_module._draw_landmark = custom
+    try:
+        render_dashboard(
+            aircraft,
+            weather,
+            str(output),
+            route=route,
+            stats={"passages": 26},
+            prediction=prediction,
+            status="live",
+        )
+    finally:
+        renderer_module._draw_landmark = original
+
+    assert calls == ["Sagrada Familia"]
