@@ -65,6 +65,7 @@ class RouteResolver:
         normalized_icao24 = re.sub(r"[^0-9a-f]", "", (icao24 or "").lower())
         last_known = self._last_known_route(normalized_icao24)
         last_known_callsign = self._last_known_callsign_route(normalized_callsign)
+        callsign_history = self._callsign_history_route(normalized_callsign)
 
         local = self._resolve_local(normalized_callsign)
         hinted = self._resolve_hints(origin_hint, destination_hint)
@@ -75,6 +76,7 @@ class RouteResolver:
             return direct_local
         merged_local = self._merge_routes(direct_local, last_known)
         merged_local = self._merge_routes(merged_local, last_known_callsign)
+        merged_local = self._merge_routes(merged_local, callsign_history)
 
         if not self.settings.opensky_routes_enabled or len(normalized_icao24) != 6:
             self._remember_last_known_route(normalized_icao24, merged_local)
@@ -155,6 +157,22 @@ class RouteResolver:
         if not (route.origin and route.destination):
             return
         self.storage.set_cache(f"route:last_known_callsign:{normalized_callsign}", asdict(route))
+
+    def _callsign_history_route(self, normalized_callsign: str) -> Route:
+        if not normalized_callsign:
+            return Route()
+        lookup = getattr(self.storage, "latest_route_for_callsign", None)
+        if not callable(lookup):
+            return Route()
+        result = lookup(normalized_callsign)
+        if not isinstance(result, dict):
+            return Route()
+        return self._build_route(
+            result.get("origin"),
+            result.get("destination"),
+            source="local_callsign_history",
+            verified_at=None,
+        )
 
     def _merge_routes(self, primary: Route, fallback: Route) -> Route:
         if not (primary.origin or primary.destination):

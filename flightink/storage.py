@@ -100,6 +100,31 @@ class Storage:
             unique = connection.execute("SELECT COUNT(DISTINCT aircraft_hex) FROM passages WHERE first_seen_at >= ?", (start,)).fetchone()[0]
         return {"passages": int(passages), "unique_aircraft": int(unique)}
 
+    def latest_route_for_callsign(self, callsign: str, max_age_seconds: int = 7 * 24 * 3600) -> dict[str, str] | None:
+        value = (callsign or "").strip().upper()
+        if not value:
+            return None
+        threshold = int(time.time()) - max_age_seconds
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT origin, destination, last_seen_at
+                FROM passages
+                WHERE callsign = ?
+                  AND destination IS NOT NULL
+                  AND destination != ''
+                ORDER BY last_seen_at DESC
+                LIMIT 1
+                """,
+                (value,),
+            ).fetchone()
+        if row is None or int(row["last_seen_at"]) < threshold:
+            return None
+        return {
+            "origin": str(row["origin"] or "").strip().upper(),
+            "destination": str(row["destination"] or "").strip().upper(),
+        }
+
     def get_cache(self, key: str, max_age_seconds: int) -> Any | None:
         payload = self._read_cache()
         item = payload.get(key)

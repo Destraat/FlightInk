@@ -35,3 +35,18 @@ def test_route_resolver_rejects_unverified_wildcard_guess(tmp_path: Path) -> Non
     route = RouteResolver(storage, settings).resolve("KLM14001")
     assert route.destination is None
     assert route.label == "Route unknown"
+
+
+def test_storage_returns_latest_route_for_callsign(tmp_path: Path) -> None:
+    storage = Storage(str(tmp_path / "flightink.db"), str(tmp_path / "cache.json"))
+    aircraft = Aircraft("abc123", "BEL4BP", "OO-SNB", "A320", 52.0, 5.0, 10000, 400, 90, 2.0)
+
+    class Route:
+        origin = "BRU"
+        destination = "CPH"
+
+    storage.record_sighting(aircraft, Route())
+    latest = storage.latest_route_for_callsign("BEL4BP")
+    assert latest is not None
+    assert latest["origin"] == "BRU"
+    assert latest["destination"] == "CPH"

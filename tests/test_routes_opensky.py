@@ -11,12 +11,17 @@ from flightink.routes import RouteResolver
 class FakeStorage:
     def __init__(self) -> None:
         self.values: dict[str, Any] = {}
+        self.callsign_history: dict[str, dict[str, str]] = {}
 
     def get_cache(self, key: str, max_age_seconds: int) -> Any:
         return self.values.get(key)
 
     def set_cache(self, key: str, value: Any) -> None:
         self.values[key] = value
+
+    def latest_route_for_callsign(self, callsign: str, max_age_seconds: int = 7 * 24 * 3600) -> dict[str, str] | None:
+        _ = max_age_seconds
+        return self.callsign_history.get(callsign)
 
 
 class FakeResponse:
@@ -355,6 +360,27 @@ def test_last_known_callsign_route_fills_missing_destination() -> None:
     assert route.origin == "HEL"
     assert route.destination == "AMS"
     assert route.source == "opensky_aircraft_flights"
+
+
+def test_callsign_history_fills_missing_destination() -> None:
+    storage = FakeStorage()
+    storage.callsign_history["BEL4BP"] = {"origin": "BRU", "destination": "CPH"}
+    session = FakeSession([
+        {
+            "icao24": "44cd77",
+            "callsign": "BEL4BP",
+            "firstSeen": 100,
+            "lastSeen": 200,
+            "estDepartureAirport": "EBBR",
+            "estArrivalAirport": None,
+        }
+    ])
+    resolver = RouteResolver(storage, settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("BEL4BP", "44CD77", "OO-SNB")
+
+    assert route.origin == "BRU"
+    assert route.destination == "CPH"
 
 
 def test_more_complete_route_wins_over_newer_partial_match() -> None:
