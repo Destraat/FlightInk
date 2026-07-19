@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
-from PIL import ImageDraw
+from PIL import Image, ImageDraw
 
 LandmarkDrawer = Callable[[ImageDraw.ImageDraw, int, int, int, int], None]
+ROOT = Path(__file__).resolve().parent.parent
+LANDMARK_ASSET_DIR = ROOT / "assets" / "landmarks"
 
 
 def draw_landmark(
@@ -21,12 +24,70 @@ def draw_landmark(
     visible after conversion to the Waveshare panel's one-bit output. Unknown
     landmarks receive a full skyline fallback instead of an empty box.
     """
+    if _draw_landmark_asset(draw, x1, y1, x2, y2, landmark):
+        return
+
     draw.rounded_rectangle((x1, y1, x2, y2), radius=4, outline=70, width=1, fill=238)
     draw.line((x1 + 3, y2 - 5, x2 - 3, y2 - 5), fill=55, width=2)
 
     key = _normalise(landmark)
     drawer = _resolve_drawer(key)
     drawer(draw, x1 + 5, y1 + 3, x2 - 5, y2 - 6)
+
+
+def _draw_landmark_asset(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y2: int, landmark: str) -> bool:
+    image = getattr(draw, "_image", None)
+    if not isinstance(image, Image.Image):
+        return False
+
+    for slug in _asset_candidates(landmark):
+        asset = _load_asset(slug)
+        if asset is None:
+            continue
+        panel = Image.new("L", (max(1, x2 - x1 + 1), max(1, y2 - y1 + 1)), 244)
+        fitted = _fit_asset(asset, panel.size)
+        panel.paste(fitted, (0, panel.size[1] - fitted.size[1]))
+        ImageDraw.Draw(panel).rounded_rectangle((0, 0, panel.size[0] - 1, panel.size[1] - 1), radius=4, outline=70, width=1)
+        image.paste(panel, (x1, y1))
+        return True
+    return False
+
+
+def _asset_candidates(landmark: str) -> list[str]:
+    name = _normalise(landmark)
+    candidates = [_slugify(name)]
+    if "sagrada" in name or "barcelona" in name:
+        candidates.append("barcelona")
+    if "eiffel" in name or "parijs" in name:
+        candidates.append("paris")
+    candidates.append("default")
+    return [item for item in candidates if item]
+
+
+def _slugify(value: str) -> str:
+    return "".join(ch if ch.isalnum() else "-" for ch in value.lower()).strip("-")
+
+
+def _load_asset(slug: str) -> Image.Image | None:
+    for extension in (".png", ".jpg", ".jpeg", ".webp"):
+        candidate = LANDMARK_ASSET_DIR / f"{slug}{extension}"
+        if not candidate.exists():
+            continue
+        try:
+            return Image.open(candidate).convert("L")
+        except OSError:
+            return None
+    return None
+
+
+def _fit_asset(asset: Image.Image, size: tuple[int, int]) -> Image.Image:
+    target_w, target_h = size
+    if target_w <= 0 or target_h <= 0:
+        return asset
+    ratio = min(target_w / asset.width, target_h / asset.height)
+    width = max(1, int(asset.width * ratio))
+    height = max(1, int(asset.height * ratio))
+    return asset.resize((width, height), Image.Resampling.LANCZOS)
 
 
 def _normalise(value: str) -> str:
