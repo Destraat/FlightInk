@@ -328,6 +328,35 @@ def test_last_known_route_fills_missing_departure() -> None:
     assert route.destination == "BLQ"
 
 
+def test_last_known_callsign_route_fills_missing_destination() -> None:
+    storage = FakeStorage()
+    storage.values["route:last_known_callsign:KLM60A"] = {
+        "origin": "HEL",
+        "destination": "AMS",
+        "destination_country": "NL",
+        "landmark": "Westertoren",
+        "source": "opensky_aircraft_flights",
+        "verified_at": "1784312357",
+    }
+    session = FakeSession([
+        {
+            "icao24": "486898",
+            "callsign": "KLM60A",
+            "firstSeen": 100,
+            "lastSeen": 200,
+            "estDepartureAirport": "EFHK",
+            "estArrivalAirport": None,
+        }
+    ])
+    resolver = RouteResolver(storage, settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("KLM60A", "486898", "PH-BXX")
+
+    assert route.origin == "HEL"
+    assert route.destination == "AMS"
+    assert route.source == "opensky_aircraft_flights"
+
+
 def test_more_complete_route_wins_over_newer_partial_match() -> None:
     resolver = RouteResolver(FakeStorage(), settings(), FakeSession([]))  # type: ignore[arg-type]
     now = 10_000

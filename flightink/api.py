@@ -188,6 +188,14 @@ def _split_route(value: str) -> tuple[str, str]:
         if separator in normalized:
             left, right = normalized.split(separator, 1)
             return _normalize_airport_code(left), _normalize_airport_code(right)
+    # Fallback for concatenated route fragments such as "EHTXDMKCR".
+    for pivot in (4, 3, 5):
+        if len(normalized) <= pivot:
+            continue
+        left = _normalize_airport_code(normalized[:pivot])
+        right = _normalize_airport_code(normalized[pivot:])
+        if left and right:
+            return left, right
     return "", ""
 
 
@@ -196,7 +204,12 @@ def _normalize_airport_code(value: Any) -> str:
     if not code:
         return ""
     code = "".join(ch for ch in code if ch.isalnum())
-    return code if len(code) in {3, 4} else ""
+    if len(code) in {3, 4}:
+        return code
+    # Some feeds append trailing noise to IATA code fragments, e.g. DMKCR.
+    if len(code) == 5 and code[:3].isalpha():
+        return code[:3]
+    return ""
 
 
 def _to_float(value: Any) -> float | None:

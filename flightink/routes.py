@@ -64,17 +64,21 @@ class RouteResolver:
         normalized_callsign = re.sub(r"\s+", "", callsign or "").upper()
         normalized_icao24 = re.sub(r"[^0-9a-f]", "", (icao24 or "").lower())
         last_known = self._last_known_route(normalized_icao24)
+        last_known_callsign = self._last_known_callsign_route(normalized_callsign)
 
         local = self._resolve_local(normalized_callsign)
         hinted = self._resolve_hints(origin_hint, destination_hint)
         direct_local = self._merge_routes(local, hinted)
         if direct_local.origin and direct_local.destination:
             self._remember_last_known_route(normalized_icao24, direct_local)
+            self._remember_last_known_callsign_route(normalized_callsign, direct_local)
             return direct_local
         merged_local = self._merge_routes(direct_local, last_known)
+        merged_local = self._merge_routes(merged_local, last_known_callsign)
 
         if not self.settings.opensky_routes_enabled or len(normalized_icao24) != 6:
             self._remember_last_known_route(normalized_icao24, merged_local)
+            self._remember_last_known_callsign_route(normalized_callsign, merged_local)
             return merged_local
 
         cache_key = f"route:opensky:{normalized_icao24}:{normalized_callsign or '-'}"
@@ -86,6 +90,7 @@ class RouteResolver:
                 cached_route = Route()
             if cached_route.origin and cached_route.destination:
                 self._remember_last_known_route(normalized_icao24, cached_route)
+                self._remember_last_known_callsign_route(normalized_callsign, cached_route)
                 return cached_route
 
         try:
@@ -98,12 +103,14 @@ class RouteResolver:
                 exc_info=True,
             )
             self._remember_last_known_route(normalized_icao24, merged_local)
+            self._remember_last_known_callsign_route(normalized_callsign, merged_local)
             return merged_local
 
         route = self._merge_routes(opensky, merged_local)
         if route.origin or route.destination:
             self.storage.set_cache(cache_key, asdict(route))
         self._remember_last_known_route(normalized_icao24, route)
+        self._remember_last_known_callsign_route(normalized_callsign, route)
         return route
 
     def _resolve_hints(self, origin_hint: str | None, destination_hint: str | None) -> Route:
@@ -130,6 +137,24 @@ class RouteResolver:
         if not (route.origin or route.destination):
             return
         self.storage.set_cache(f"route:last_known:{normalized_icao24}", asdict(route))
+
+    def _last_known_callsign_route(self, normalized_callsign: str) -> Route:
+        if not normalized_callsign:
+            return Route()
+        cached = self.storage.get_cache(f"route:last_known_callsign:{normalized_callsign}", 3 * 24 * 3600)
+        if not isinstance(cached, dict):
+            return Route()
+        try:
+            return Route(**cached)
+        except TypeError:
+            return Route()
+
+    def _remember_last_known_callsign_route(self, normalized_callsign: str, route: Route) -> None:
+        if not normalized_callsign:
+            return
+        if not (route.origin and route.destination):
+            return
+        self.storage.set_cache(f"route:last_known_callsign:{normalized_callsign}", asdict(route))
 
     def _merge_routes(self, primary: Route, fallback: Route) -> Route:
         if not (primary.origin or primary.destination):
