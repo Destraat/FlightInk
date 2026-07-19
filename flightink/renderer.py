@@ -88,7 +88,7 @@ def render_dashboard(
     _draw_frame(draw, size)
 
     left = (28, 24, 546, 438)
-    right = (558, 24, 772, 438)
+    right = (552, 24, 772, 438)
     _draw_header(draw, fonts, left, status)
     _draw_scene_background(draw, left, weather)
 
@@ -302,16 +302,15 @@ def _draw_info_panel(
         draw.text((x1 + 28, cursor), label, font=fonts["tiny"], fill=82)
         value_x = x1 + 128 if label == "OVER ONS HUIS" else x1 + 104
         draw.text((value_x, cursor), value, font=fonts["small_bold"], fill=24)
-        cursor += 20
+        cursor += 18
 
     draw.line((x1 + 8, cursor + 1, x2 - 8, cursor + 1), fill=128, width=1)
     cursor += 8
     draw.text((x1 + 10, cursor), "BESTEMMING" if has_route_block else "LANDMARK", font=fonts["tiny"], fill=82)
-    cursor += 13
+    cursor += 12
     draw.text((x1 + 10, cursor), _city_for_code(destination if has_route_block else landmark).upper(), font=fonts["heading"], fill=16)
-    draw.text((x1 + 10, cursor + 22), _country_name(destination_country) if has_route_block else "Sfeerweergave", font=fonts["small"], fill=65)
-    draw.text((x1 + 10, cursor + 36), landmark, font=fonts["tiny"], fill=70)
-    _draw_landmark_asset(draw, (x1 + 8, y2 - 60, x2 - 8, y2 - 8), landmark_key)
+    draw.text((x1 + 10, cursor + 18), _country_name(destination_country) if has_route_block else "Sfeerweergave", font=fonts["small"], fill=65)
+    _draw_landmark_asset(draw, (x1 + 8, cursor + 34, x2 - 8, y2 - 8), landmark_key)
 
 
 def _draw_flight_card(
