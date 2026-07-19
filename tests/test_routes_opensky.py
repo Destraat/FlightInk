@@ -275,7 +275,7 @@ def test_airport_fallback_http_error_keeps_partial_route() -> None:
 
     route = resolver.resolve("KLM74N", "486495", "PH-BQH")
 
-    assert route.origin == "LIPE"
+    assert route.origin == "BLQ"
     assert route.destination is None
     assert route.source == "opensky_aircraft_flights"
 
@@ -325,7 +325,7 @@ def test_last_known_route_fills_missing_departure() -> None:
     route = resolver.resolve("KLM74N", "486495", "PH-BQH")
 
     assert route.origin == "HAM"
-    assert route.destination == "LIPE"
+    assert route.destination == "BLQ"
 
 
 def test_more_complete_route_wins_over_newer_partial_match() -> None:
