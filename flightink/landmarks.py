@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 LandmarkDrawer = Callable[[ImageDraw.ImageDraw, int, int, int, int], None]
 ROOT = Path(__file__).resolve().parent.parent
@@ -46,8 +46,15 @@ def _draw_landmark_asset(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y
         if asset is None:
             continue
         panel = Image.new("L", (max(1, x2 - x1 + 1), max(1, y2 - y1 + 1)), 244)
-        fitted = _fit_asset(asset, panel.size)
-        panel.paste(fitted, (0, panel.size[1] - fitted.size[1]))
+        prepared = ImageOps.autocontrast(asset, cutoff=2)
+        inner_w = max(1, panel.size[0] - 8)
+        inner_h = max(1, panel.size[1] - 8)
+        fitted = _fit_asset(prepared, (inner_w, inner_h))
+        # Strong two-tone contrast survives e-ink dithering much better.
+        fitted = fitted.point(lambda px: 20 if px < 150 else 236)
+        ox = (panel.size[0] - fitted.size[0]) // 2
+        oy = (panel.size[1] - fitted.size[1]) // 2
+        panel.paste(fitted, (ox, oy))
         ImageDraw.Draw(panel).rounded_rectangle((0, 0, panel.size[0] - 1, panel.size[1] - 1), radius=4, outline=70, width=1)
         image.paste(panel, (x1, y1))
         return True
