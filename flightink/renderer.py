@@ -295,7 +295,8 @@ def _draw_info_panel(
     for label, value, icon in metrics:
         icon(draw, x1 + 10, cursor + 1)
         draw.text((x1 + 28, cursor), label, font=fonts["tiny"], fill=82)
-        draw.text((x1 + 104, cursor), value, font=fonts["small_bold"], fill=24)
+        value_x = x1 + 128 if label == "OVER ONS HUIS" else x1 + 104
+        draw.text((value_x, cursor), value, font=fonts["small_bold"], fill=24)
         cursor += 20
 
     draw.line((x1 + 8, cursor + 1, x2 - 8, cursor + 1), fill=128, width=1)
@@ -534,7 +535,7 @@ def _format_speed(aircraft: Aircraft) -> str:
 def _format_track(aircraft: Aircraft) -> str:
     if aircraft.track is None:
         return "onbekend"
-    return f"{aircraft.track:.0f} deg"
+    return f"{aircraft.track:.0f} graden"
 
 
 def _format_eta(prediction: PassagePrediction | None) -> str:
