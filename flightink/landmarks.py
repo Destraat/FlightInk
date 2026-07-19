@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 LandmarkDrawer = Callable[[ImageDraw.ImageDraw, int, int, int, int], None]
 ROOT = Path(__file__).resolve().parent.parent
 LANDMARK_ASSET_DIR = ROOT / "assets" / "landmarks"
+LANDMARK_GENERATED_ASSET_DIR = LANDMARK_ASSET_DIR / "generated"
 
 
 def draw_landmark(
@@ -55,13 +56,22 @@ def _draw_landmark_asset(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y
 
 def _asset_candidates(landmark: str) -> list[str]:
     name = _normalise(landmark)
+    raw = (landmark or "").strip()
     candidates = [_slugify(name)]
+    if raw.isalpha() and len(raw) in {3, 4}:
+        candidates.insert(0, raw.lower())
     if "sagrada" in name or "barcelona" in name:
         candidates.append("barcelona")
     if "eiffel" in name or "parijs" in name:
         candidates.append("paris")
     candidates.append("default")
-    return [item for item in candidates if item]
+    values: list[str] = []
+    for item in candidates:
+        if not item:
+            continue
+        values.append(item)
+        values.append(f"dest-{item}")
+    return values
 
 
 def _slugify(value: str) -> str:
@@ -69,14 +79,15 @@ def _slugify(value: str) -> str:
 
 
 def _load_asset(slug: str) -> Image.Image | None:
-    for extension in (".png", ".jpg", ".jpeg", ".webp"):
-        candidate = LANDMARK_ASSET_DIR / f"{slug}{extension}"
-        if not candidate.exists():
-            continue
-        try:
-            return Image.open(candidate).convert("L")
-        except OSError:
-            return None
+    for base in (LANDMARK_ASSET_DIR, LANDMARK_GENERATED_ASSET_DIR):
+        for extension in (".png", ".jpg", ".jpeg", ".webp"):
+            candidate = base / f"{slug}{extension}"
+            if not candidate.exists():
+                continue
+            try:
+                return Image.open(candidate).convert("L")
+            except OSError:
+                return None
     return None
 
 

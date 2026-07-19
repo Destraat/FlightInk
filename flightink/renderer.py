@@ -255,6 +255,8 @@ def _draw_info_panel(
         getattr(route, "destination_country", None) or destination_meta.get("country") or livery.get("country", "--")
     )
     landmark = str(getattr(route, "landmark", None) or destination_meta.get("landmark") or "")
+    if not landmark and has_destination:
+        landmark = _city_for_code(destination)
     if not landmark:
         landmark = _fallback_landmark_for_aircraft(aircraft) if not has_route_block else "Onbekende landmark"
 
