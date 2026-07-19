@@ -255,10 +255,15 @@ def _draw_info_panel(
         getattr(route, "destination_country", None) or destination_meta.get("country") or livery.get("country", "--")
     )
     landmark = str(getattr(route, "landmark", None) or destination_meta.get("landmark") or "")
+    landmark_key = landmark
     if not landmark and has_destination:
         landmark = _city_for_code(destination)
+        # Generated assets are keyed by destination code; prefer that lookup key.
+        landmark_key = destination
     if not landmark:
         landmark = _fallback_landmark_for_aircraft(aircraft) if not has_route_block else "Onbekende landmark"
+    if not landmark_key:
+        landmark_key = landmark
 
     draw.rounded_rectangle((x1, y1, x2, y2), radius=8, outline=75, width=1, fill=248)
     _draw_flight_card(draw, fonts, (x1 + 8, y1 + 8, x2 - 8, y1 + 90), aircraft, livery)
@@ -306,7 +311,7 @@ def _draw_info_panel(
     draw.text((x1 + 10, cursor), _city_for_code(destination if has_route_block else landmark).upper(), font=fonts["heading"], fill=16)
     draw.text((x1 + 10, cursor + 22), _country_name(destination_country) if has_route_block else "Sfeerweergave", font=fonts["small"], fill=65)
     draw.text((x1 + 10, cursor + 36), landmark, font=fonts["tiny"], fill=70)
-    _draw_landmark_asset(draw, (x1 + 8, y2 - 60, x2 - 8, y2 - 8), landmark)
+    _draw_landmark_asset(draw, (x1 + 8, y2 - 60, x2 - 8, y2 - 8), landmark_key)
 
 
 def _draw_flight_card(
