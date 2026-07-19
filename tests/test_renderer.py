@@ -77,3 +77,11 @@ def test_render_dashboard_uses_custom_landmark_drawer(tmp_path: Path) -> None:
         renderer_module._draw_landmark = original
 
     assert calls == ["Sagrada Familia"]
+
+
+def test_fallback_landmark_is_deterministic_per_aircraft() -> None:
+    aircraft = Aircraft("486898", "KLM60A", "PH-BXX", "B738", 52.12, 5.12, 35600, 445, 162, 1.9)
+    first = renderer_module._fallback_landmark_for_aircraft(aircraft)
+    second = renderer_module._fallback_landmark_for_aircraft(aircraft)
+    assert first == second
+    assert first

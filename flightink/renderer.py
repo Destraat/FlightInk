@@ -245,30 +245,41 @@ def _draw_info_panel(
     livery = airline_livery(aircraft.airline_code)
     origin = getattr(route, "origin", None) or "---"
     destination = getattr(route, "destination", None) or "---"
+    has_origin = origin != "---"
+    has_destination = destination != "---"
+    has_route_block = has_origin or has_destination
     origin_meta = _destination_meta(origin)
     destination_meta = _destination_meta(destination)
     origin_country = str(origin_meta.get("country") or "")
     destination_country = str(
         getattr(route, "destination_country", None) or destination_meta.get("country") or livery.get("country", "--")
     )
-    landmark = str(getattr(route, "landmark", None) or destination_meta.get("landmark") or "Onbekende landmark")
+    landmark = str(getattr(route, "landmark", None) or destination_meta.get("landmark") or "")
+    if not landmark:
+        landmark = _fallback_landmark_for_aircraft(aircraft) if not has_route_block else "Onbekende landmark"
 
     draw.rounded_rectangle((x1, y1, x2, y2), radius=8, outline=75, width=1, fill=248)
     _draw_flight_card(draw, fonts, (x1 + 8, y1 + 8, x2 - 8, y1 + 90), aircraft, livery)
 
     cursor = y1 + 106
-    draw.text((x1 + 10, cursor), "VAN", font=fonts["tiny"], fill=80)
-    draw.text((x1 + 114, cursor), "NAAR", font=fonts["tiny"], fill=80)
-    cursor += 14
-    draw.text((x1 + 10, cursor), origin, font=fonts["heading"], fill=18)
-    draw.text((x1 + 114, cursor), destination, font=fonts["heading"], fill=18)
-    draw.text((x1 + 88, cursor + 2), ">", font=fonts["body_bold"], fill=38)
-    draw.text((x1 + 10, cursor + 22), _city_for_code(origin), font=fonts["tiny"], fill=70)
-    draw.text((x1 + 114, cursor + 22), _city_for_code(destination), font=fonts["tiny"], fill=70)
-    draw.text((x1 + 10, cursor + 35), _country_name(origin_country), font=fonts["tiny"], fill=70)
-    draw.text((x1 + 114, cursor + 35), _country_name(destination_country), font=fonts["tiny"], fill=70)
-    _draw_flag(draw, x2 - 50, cursor + 2, 36, 22, destination_country)
-    cursor += 54
+    if has_route_block:
+        draw.text((x1 + 10, cursor), "VAN", font=fonts["tiny"], fill=80)
+        draw.text((x1 + 114, cursor), "NAAR", font=fonts["tiny"], fill=80)
+        cursor += 14
+        draw.text((x1 + 10, cursor), origin, font=fonts["heading"], fill=18)
+        draw.text((x1 + 114, cursor), destination, font=fonts["heading"], fill=18)
+        draw.text((x1 + 88, cursor + 2), ">", font=fonts["body_bold"], fill=38)
+        draw.text((x1 + 10, cursor + 22), _city_for_code(origin), font=fonts["tiny"], fill=70)
+        draw.text((x1 + 114, cursor + 22), _city_for_code(destination), font=fonts["tiny"], fill=70)
+        draw.text((x1 + 10, cursor + 35), _country_name(origin_country), font=fonts["tiny"], fill=70)
+        draw.text((x1 + 114, cursor + 35), _country_name(destination_country), font=fonts["tiny"], fill=70)
+        _draw_flag(draw, x2 - 50, cursor + 2, 36, 22, destination_country)
+        cursor += 54
+    else:
+        draw.text((x1 + 10, cursor), "ROUTE ONBEKEND", font=fonts["small_bold"], fill=26)
+        draw.text((x1 + 10, cursor + 14), "VAN/NAAR niet beschikbaar", font=fonts["tiny"], fill=82)
+        cursor += 34
+
     draw.line((x1 + 8, cursor, x2 - 8, cursor), fill=128, width=1)
     cursor += 6
 
@@ -287,10 +298,10 @@ def _draw_info_panel(
 
     draw.line((x1 + 8, cursor + 1, x2 - 8, cursor + 1), fill=128, width=1)
     cursor += 8
-    draw.text((x1 + 10, cursor), "BESTEMMING", font=fonts["tiny"], fill=82)
+    draw.text((x1 + 10, cursor), "BESTEMMING" if has_route_block else "LANDMARK", font=fonts["tiny"], fill=82)
     cursor += 13
-    draw.text((x1 + 10, cursor), _city_for_code(destination).upper(), font=fonts["heading"], fill=16)
-    draw.text((x1 + 10, cursor + 22), _country_name(destination_country), font=fonts["small"], fill=65)
+    draw.text((x1 + 10, cursor), _city_for_code(destination if has_route_block else landmark).upper(), font=fonts["heading"], fill=16)
+    draw.text((x1 + 10, cursor + 22), _country_name(destination_country) if has_route_block else "Sfeerweergave", font=fonts["small"], fill=65)
     draw.text((x1 + 10, cursor + 36), landmark, font=fonts["tiny"], fill=70)
     _draw_landmark_asset(draw, (x1 + 8, y2 - 60, x2 - 8, y2 - 8), landmark)
 
@@ -632,6 +643,21 @@ def _destination_meta(code: str | None) -> dict[str, Any]:
     if not key:
         return {}
     return _destinations_lookup().get(key, {})
+
+
+def _fallback_landmark_for_aircraft(aircraft: Aircraft) -> str:
+    choices = (
+        "Westertoren",
+        "Eiffeltoren",
+        "Sagrada Família",
+        "Big Ben",
+        "Colosseum",
+        "Burj Khalifa",
+        "Brandenburger Tor",
+    )
+    seed = (aircraft.hex or aircraft.callsign or aircraft.registration or "LANDMARK").upper()
+    index = sum(ord(ch) for ch in seed) % len(choices)
+    return choices[index]
 
 
 def _fonts() -> dict[str, ImageFont.ImageFont]:
