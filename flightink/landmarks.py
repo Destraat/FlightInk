@@ -36,7 +36,7 @@ def _normalise(value: str) -> str:
 def _resolve_drawer(name: str) -> LandmarkDrawer:
     matches: tuple[tuple[tuple[str, ...], LandmarkDrawer], ...] = (
         (("eiffel",), _eiffel),
-        (("sagrada",), _sagrada),
+        (("sagrada", "barcelona"), _barcelona_scene),
         (("big ben", "westminster"), _big_ben),
         (("colosseum", "colosseum"), _colosseum),
         (("westertoren", "grachten", "amsterdam"), _amsterdam),
@@ -64,6 +64,90 @@ def _resolve_drawer(name: str) -> LandmarkDrawer:
         if any(needle in name for needle in needles):
             return drawer
     return _skyline
+
+
+def _barcelona_scene(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y2: int) -> None:
+    """Detailed Barcelona skyline inspired by Sagrada + city silhouette."""
+    w = max(1, x2 - x1)
+    h = max(1, y2 - y1)
+
+    def px(rx: float) -> int:
+        return x1 + int(w * rx)
+
+    def py(ry: float) -> int:
+        return y1 + int(h * ry)
+
+    ground = py(0.93)
+    draw.line((px(0.0), ground, px(1.0), ground), fill=35, width=2)
+
+    # Left city silhouette.
+    left_blocks = (
+        (0.02, 0.62, 0.05),
+        (0.07, 0.66, 0.05),
+        (0.12, 0.58, 0.06),
+        (0.18, 0.64, 0.04),
+        (0.22, 0.56, 0.06),
+        (0.28, 0.60, 0.05),
+    )
+    for rx, top, rw in left_blocks:
+        bx1, bx2 = px(rx), px(rx + rw)
+        by1, by2 = py(top), ground
+        draw.rectangle((bx1, by1, bx2, by2), outline=70, fill=222, width=1)
+        draw.line((bx1 + 2, by1 + 4, bx2 - 2, by1 + 4), fill=120, width=1)
+
+    # Right side modern tower (Torre Glories style).
+    tower_l, tower_r = px(0.84), px(0.95)
+    tower_t = py(0.24)
+    draw.ellipse((tower_l, tower_t, tower_r, ground), outline=35, fill=210, width=2)
+    for i in range(6):
+        y = tower_t + int((ground - tower_t) * (i + 1) / 7)
+        draw.line((tower_l + 3, y, tower_r - 3, y), fill=95, width=1)
+
+    # Palm trees for foreground texture.
+    for trunk_x in (0.74, 0.79, 0.97):
+        tx = px(trunk_x)
+        draw.line((tx, ground, tx, py(0.79)), fill=40, width=1)
+        top = py(0.79)
+        draw.line((tx, top, tx - 6, top - 4), fill=60, width=1)
+        draw.line((tx, top, tx + 6, top - 4), fill=60, width=1)
+        draw.line((tx, top, tx - 5, top - 1), fill=60, width=1)
+        draw.line((tx, top, tx + 5, top - 1), fill=60, width=1)
+
+    # Sagrada Familia cluster center.
+    spires = (
+        (0.37, 0.34, 0.03),
+        (0.42, 0.18, 0.035),
+        (0.47, 0.08, 0.038),
+        (0.52, 0.11, 0.038),
+        (0.57, 0.2, 0.034),
+        (0.62, 0.31, 0.03),
+    )
+    for rx, top, rw in spires:
+        sx1, sx2 = px(rx), px(rx + rw)
+        sy1 = py(top)
+        draw.rectangle((sx1, sy1, sx2, ground), outline=35, fill=205, width=1)
+        cx = (sx1 + sx2) // 2
+        draw.polygon(((cx, sy1 - 5), (sx1 + 1, sy1), (sx2 - 1, sy1)), fill=28)
+        # Gothic window/stone texture.
+        for row in range(sy1 + 5, ground - 2, max(4, h // 14)):
+            draw.line((sx1 + 1, row, sx2 - 1, row), fill=110, width=1)
+        draw.line((cx, sy1 + 2, cx, ground - 2), fill=95, width=1)
+
+    # Central basilica base and arches.
+    base_l, base_r = px(0.35), px(0.64)
+    base_t = py(0.46)
+    draw.rectangle((base_l, base_t, base_r, ground), outline=35, fill=215, width=2)
+    span = base_r - base_l
+    for i in range(8):
+        ax = base_l + int((i + 0.5) * span / 8)
+        draw.arc((ax - 6, py(0.69), ax + 6, ground), 180, 360, fill=65, width=1)
+    for i in range(5):
+        y = base_t + int((ground - base_t) * (i + 1) / 6)
+        draw.line((base_l + 2, y, base_r - 2, y), fill=120, width=1)
+
+    # Fine foreground hatch to mimic engraved style.
+    for xx in range(px(0.0), px(1.0), 7):
+        draw.line((xx, ground + 1, xx + 3, ground + 3), fill=145, width=1)
 
 
 def _eiffel(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y2: int) -> None:
