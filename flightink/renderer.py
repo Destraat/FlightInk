@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +11,8 @@ from PIL import Image, ImageDraw, ImageFont
 from .catalog import airline_livery
 from .models import Aircraft, Weather, aircraft_name
 from .prediction import PassagePrediction
+
+DESTINATIONS_FILE = Path(__file__).resolve().parent.parent / "data" / "destinations.json"
 
 
 AIRCRAFT_ASSETS: dict[str, dict[str, object]] = {
@@ -240,8 +244,13 @@ def _draw_info_panel(
     livery = airline_livery(aircraft.airline_code)
     origin = getattr(route, "origin", None) or "---"
     destination = getattr(route, "destination", None) or "---"
-    destination_country = getattr(route, "destination_country", None) or livery.get("country", "--")
-    landmark = getattr(route, "landmark", None) or "Onbekende landmark"
+    origin_meta = _destination_meta(origin)
+    destination_meta = _destination_meta(destination)
+    origin_country = str(origin_meta.get("country") or "")
+    destination_country = str(
+        getattr(route, "destination_country", None) or destination_meta.get("country") or livery.get("country", "--")
+    )
+    landmark = str(getattr(route, "landmark", None) or destination_meta.get("landmark") or "Onbekende landmark")
 
     draw.rounded_rectangle((x1, y1, x2, y2), radius=8, outline=75, width=1, fill=248)
     _draw_flight_card(draw, fonts, (x1 + 8, y1 + 8, x2 - 8, y1 + 90), aircraft, livery)
@@ -255,6 +264,7 @@ def _draw_info_panel(
     draw.text((x1 + 88, cursor + 2), ">", font=fonts["body_bold"], fill=38)
     draw.text((x1 + 10, cursor + 22), _city_for_code(origin), font=fonts["tiny"], fill=70)
     draw.text((x1 + 114, cursor + 22), _city_for_code(destination), font=fonts["tiny"], fill=70)
+    draw.text((x1 + 10, cursor + 35), _country_name(origin_country), font=fonts["tiny"], fill=70)
     draw.text((x1 + 114, cursor + 35), _country_name(destination_country), font=fonts["tiny"], fill=70)
     _draw_flag(draw, x2 - 50, cursor + 2, 36, 22, destination_country)
     cursor += 54
@@ -557,6 +567,12 @@ def _country_name(country_code: str | None) -> str:
 
 
 def _city_for_code(code: str | None) -> str:
+    value = (code or "").strip().upper()
+    meta = _destination_meta(value)
+    city = str(meta.get("city") or "").strip()
+    if city:
+        return city
+
     mapping = {
         "AMS": "Amsterdam",
         "ANR": "Antwerpen",
@@ -584,8 +600,32 @@ def _city_for_code(code: str | None) -> str:
         "LIS": "Lisbon",
         "FCO": "Rome",
     }
-    value = (code or "").strip().upper()
     return mapping.get(value, value or "Onbekend")
+
+
+@lru_cache(maxsize=1)
+def _destinations_lookup() -> dict[str, dict[str, Any]]:
+    if not DESTINATIONS_FILE.exists():
+        return {}
+    try:
+        value = json.loads(DESTINATIONS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(value, dict):
+        return {}
+    lookup: dict[str, dict[str, Any]] = {}
+    for key, item in value.items():
+        if not isinstance(item, dict):
+            continue
+        lookup[str(key).strip().upper()] = item
+    return lookup
+
+
+def _destination_meta(code: str | None) -> dict[str, Any]:
+    key = (code or "").strip().upper()
+    if not key:
+        return {}
+    return _destinations_lookup().get(key, {})
 
 
 def _fonts() -> dict[str, ImageFont.ImageFont]:
