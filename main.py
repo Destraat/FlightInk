@@ -9,7 +9,7 @@ from dataclasses import asdict
 import requests
 
 from flightink import renderer as renderer_module
-from flightink.api import create_session, fetch_aircraft, fetch_local_aircraft, fetch_weather
+from flightink.api import create_session, fetch_aircraft, fetch_local_aircraft, fetch_remote_aircraft, fetch_weather
 from flightink.config import Settings
 from flightink.display import Display, create_display
 from flightink.landmarks import draw_landmark
@@ -46,6 +46,72 @@ def _ranked_aircraft(aircraft: list[Aircraft], settings: Settings) -> list[tuple
     ranked = [(item, predict_passage(item, settings.home_lat, settings.home_lon)) for item in aircraft]
     ranked.sort(key=lambda pair: selection_score(pair[0], pair[1]))
     return ranked
+
+
+def _aircraft_hint_identity(aircraft: Aircraft) -> str:
+    return (aircraft.hex or aircraft.callsign or aircraft.registration or "").strip().lower()
+
+
+def _best_remote_hint_match(local_aircraft: Aircraft, remote_aircraft: list[Aircraft]) -> Aircraft | None:
+    matches = [
+        item
+        for item in remote_aircraft
+        if (
+            (local_aircraft.hex and item.hex == local_aircraft.hex)
+            or (local_aircraft.callsign and item.callsign == local_aircraft.callsign)
+        )
+    ]
+    if not matches:
+        return None
+    return max(
+        matches,
+        key=lambda item: (
+            1 if local_aircraft.hex and item.hex == local_aircraft.hex else 0,
+            1 if local_aircraft.callsign and item.callsign == local_aircraft.callsign else 0,
+            int(bool(item.origin_airport)) + int(bool(item.destination_airport)),
+            -abs(item.distance_km - local_aircraft.distance_km),
+            int(item.altitude_ft or 0),
+        ),
+    )
+
+
+def _remote_route_hint_lookup(
+    aircraft: list[Aircraft],
+    settings: Settings,
+    session: requests.Session,
+) -> dict[str, tuple[str, str]]:
+    if settings.aircraft_source not in {"local", "hybrid"}:
+        return {}
+    needs_hints = [item for item in aircraft if not (item.origin_airport and item.destination_airport)]
+    if not needs_hints:
+        return {}
+    try:
+        remote_aircraft = fetch_remote_aircraft(settings, session)
+    except (requests.RequestException, ValueError, TypeError):
+        LOGGER.warning("Remote route-hint enrichment failed", exc_info=True)
+        return {}
+
+    hints: dict[str, tuple[str, str]] = {}
+    for item in needs_hints:
+        match = _best_remote_hint_match(item, remote_aircraft)
+        if match is None:
+            continue
+        origin = item.origin_airport or match.origin_airport
+        destination = item.destination_airport or match.destination_airport
+        if not (origin or destination):
+            continue
+        hints[_aircraft_hint_identity(item)] = (origin, destination)
+    return hints
+
+
+def _merged_route_hints(
+    aircraft: Aircraft,
+    remote_hints: dict[str, tuple[str, str]],
+) -> tuple[str | None, str | None]:
+    remote_origin, remote_destination = remote_hints.get(_aircraft_hint_identity(aircraft), ("", ""))
+    origin = aircraft.origin_airport or remote_origin or None
+    destination = aircraft.destination_airport or remote_destination or None
+    return origin, destination
 
 
 def _cache_live_state(storage: Storage, aircraft: Aircraft | None, weather: Weather | None) -> None:
@@ -141,25 +207,36 @@ def run_once(
     else:
         status = "no_aircraft"
 
-    route = (
-        resolver.resolve(
+    remote_hints: dict[str, tuple[str, str]] = {}
+    route = None
+    if selected:
+        origin_hint, destination_hint = _merged_route_hints(selected, remote_hints)
+        route = resolver.resolve(
             callsign=selected.callsign,
             icao24=selected.hex,
             registration=selected.registration,
-            origin_hint=selected.origin_airport,
-            destination_hint=selected.destination_airport,
+            origin_hint=origin_hint,
+            destination_hint=destination_hint,
         )
-        if selected
-        else None
-    )
     if selected and route and status == "live" and not route.destination:
+        remote_hints = _remote_route_hint_lookup([item for item, _ in ranked_live[:6]], settings, session)
+        if remote_hints:
+            origin_hint, destination_hint = _merged_route_hints(selected, remote_hints)
+            route = resolver.resolve(
+                callsign=selected.callsign,
+                icao24=selected.hex,
+                registration=selected.registration,
+                origin_hint=origin_hint,
+                destination_hint=destination_hint,
+            )
         for candidate, candidate_prediction in ranked_live[1:6]:
+            origin_hint, destination_hint = _merged_route_hints(candidate, remote_hints)
             candidate_route = resolver.resolve(
                 callsign=candidate.callsign,
                 icao24=candidate.hex,
                 registration=candidate.registration,
-                origin_hint=candidate.origin_airport,
-                destination_hint=candidate.destination_airport,
+                origin_hint=origin_hint,
+                destination_hint=destination_hint,
             )
             if candidate_route.destination:
                 selected = candidate

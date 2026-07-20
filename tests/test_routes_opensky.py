@@ -25,10 +25,15 @@ class FakeStorage:
 
 
 class FakeResponse:
-    def __init__(self, payload: Any) -> None:
+    def __init__(self, payload: Any, status_code: int = 200) -> None:
         self.payload = payload
+        self.status_code = status_code
 
     def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            error = requests.HTTPError(f"{self.status_code} error")
+            error.response = self
+            raise error
         return None
 
     def json(self) -> Any:
@@ -48,6 +53,8 @@ class FakeSession:
             if url.endswith(suffix):
                 if isinstance(payload, Exception):
                     raise payload
+                if isinstance(payload, FakeResponse):
+                    return payload
                 return FakeResponse(payload)
         return FakeResponse(self.payload)
 

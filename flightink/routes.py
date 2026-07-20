@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -52,6 +53,7 @@ class RouteResolver:
         self.airport_aliases = self._load_json(AIRPORT_ALIASES_FILE)
         self._token: str | None = None
         self._token_expires_at = 0.0
+        self._opensky_disabled_until = 0.0
 
     def resolve(
         self,
@@ -95,9 +97,15 @@ class RouteResolver:
                 self._remember_last_known_callsign_route(normalized_callsign, cached_route)
                 return cached_route
 
+        if time.time() < self._opensky_disabled_until:
+            self._remember_last_known_route(normalized_icao24, merged_local)
+            self._remember_last_known_callsign_route(normalized_callsign, merged_local)
+            return merged_local
+
         try:
             opensky = self._resolve_opensky(normalized_icao24, normalized_callsign)
         except requests.RequestException:
+            self._handle_opensky_error()
             LOGGER.warning(
                 "OpenSky route lookup failed for %s (%s)",
                 registration or normalized_icao24,
@@ -388,6 +396,29 @@ class RouteResolver:
         self._token = str(token)
         self._token_expires_at = now + int(payload.get("expires_in") or 300)
         return self._token
+
+    def _handle_opensky_error(self) -> None:
+        status = self._http_status_from_exception(sys.exc_info()[1])
+        if status not in {401, 403}:
+            return
+        self._opensky_disabled_until = max(self._opensky_disabled_until, time.time() + self.settings.opensky_route_cache_seconds)
+        LOGGER.warning(
+            "Temporarily disabling OpenSky route lookups for %s seconds after HTTP %s",
+            self.settings.opensky_route_cache_seconds,
+            status,
+        )
+
+    @staticmethod
+    def _http_status_from_exception(exc: BaseException | None) -> int | None:
+        if not isinstance(exc, requests.RequestException):
+            return None
+        response = getattr(exc, "response", None)
+        if response is None:
+            return None
+        try:
+            return int(response.status_code)
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
