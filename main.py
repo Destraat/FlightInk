@@ -211,6 +211,13 @@ def run_once(
     route = None
     if selected:
         origin_hint, destination_hint = _merged_route_hints(selected, remote_hints)
+        LOGGER.info(
+            "Selected aircraft %s (%s) with hints origin=%s destination=%s",
+            selected.registration or selected.hex,
+            selected.callsign or "no callsign",
+            origin_hint or "-",
+            destination_hint or "-",
+        )
         route = resolver.resolve(
             callsign=selected.callsign,
             icao24=selected.hex,
@@ -222,6 +229,13 @@ def run_once(
         remote_hints = _remote_route_hint_lookup([item for item, _ in ranked_live[:6]], settings, session)
         if remote_hints:
             origin_hint, destination_hint = _merged_route_hints(selected, remote_hints)
+            LOGGER.info(
+                "Retrying selected aircraft %s (%s) with remote hints origin=%s destination=%s",
+                selected.registration or selected.hex,
+                selected.callsign or "no callsign",
+                origin_hint or "-",
+                destination_hint or "-",
+            )
             route = resolver.resolve(
                 callsign=selected.callsign,
                 icao24=selected.hex,
@@ -231,6 +245,13 @@ def run_once(
             )
         for candidate, candidate_prediction in ranked_live[1:6]:
             origin_hint, destination_hint = _merged_route_hints(candidate, remote_hints)
+            LOGGER.info(
+                "Trying alternate aircraft %s (%s) with hints origin=%s destination=%s",
+                candidate.registration or candidate.hex,
+                candidate.callsign or "no callsign",
+                origin_hint or "-",
+                destination_hint or "-",
+            )
             candidate_route = resolver.resolve(
                 callsign=candidate.callsign,
                 icao24=candidate.hex,
@@ -242,6 +263,13 @@ def run_once(
                 selected = candidate
                 prediction = candidate_prediction
                 route = candidate_route
+                LOGGER.info(
+                    "Switched to alternate aircraft %s (%s) because it has destination %s via %s",
+                    selected.registration or selected.hex,
+                    selected.callsign or "no callsign",
+                    route.destination,
+                    route.source,
+                )
                 break
     if selected and status == "live":
         storage.record_sighting(selected, route, prediction)

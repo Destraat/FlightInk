@@ -117,6 +117,14 @@ class RouteResolver:
             return merged_local
 
         route = self._merge_routes(opensky, merged_local)
+        LOGGER.info(
+            "Resolved route for %s (%s): origin=%s destination=%s source=%s",
+            registration or normalized_icao24 or "unknown-aircraft",
+            normalized_callsign or "no callsign",
+            route.origin or "-",
+            route.destination or "-",
+            route.source,
+        )
         if route.origin or route.destination:
             self.storage.set_cache(cache_key, asdict(route))
         self._remember_last_known_route(normalized_icao24, route)
