@@ -266,6 +266,49 @@ def test_airport_fallback_prefers_matching_icao24() -> None:
     assert resolver._flight_score(exact_hex, "KLM59W", now, "486495") > resolver._flight_score(wrong_hex, "KLM59W", now, "486495")
 
 
+def test_airport_fallback_prefers_complete_callsign_match_over_partial_exact_hex() -> None:
+    session = FakeSession(
+        [],
+        payloads_by_suffix={
+            "/flights/aircraft": [
+                {
+                    "icao24": "4780c8",
+                    "callsign": "SAS821",
+                    "firstSeen": 100,
+                    "lastSeen": 200,
+                    "estDepartureAirport": "ENGM",
+                    "estArrivalAirport": None,
+                }
+            ],
+            "/flights/departure": [
+                {
+                    "icao24": "4780c8",
+                    "callsign": "SAS821",
+                    "firstSeen": 100,
+                    "lastSeen": 200,
+                    "estDepartureAirport": "ENGM",
+                    "estArrivalAirport": None,
+                },
+                {
+                    "icao24": "4780c9",
+                    "callsign": "SAS821",
+                    "firstSeen": 50,
+                    "lastSeen": 150,
+                    "estDepartureAirport": "ENGM",
+                    "estArrivalAirport": "EKCH",
+                },
+            ],
+        },
+    )
+    resolver = RouteResolver(FakeStorage(), settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("SAS821", "4780c8", "EI-SIF")
+
+    assert route.origin == "OSL"
+    assert route.destination == "CPH"
+    assert route.source == "opensky_airport_departure"
+
+
 def test_airport_fallback_http_error_keeps_partial_route() -> None:
     session = FakeSession(
         [],

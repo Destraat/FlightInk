@@ -316,6 +316,10 @@ class RouteResolver:
             return Route()
         candidates = [item for item in payload if isinstance(item, dict)]
         best = self._best_flight(candidates, icao24, callsign, now)
+        if best and not best.get("estArrivalAirport"):
+            complete_callsign_match = self._best_complete_callsign_flight(candidates, callsign, now)
+            if complete_callsign_match is not None:
+                best = complete_callsign_match
         if not best:
             return Route()
         return self._build_route(
@@ -354,6 +358,22 @@ class RouteResolver:
         last_seen = int(item.get("lastSeen") or 0)
         active_or_recent = 1 if first_seen <= now and (not last_seen or last_seen >= now - 12 * 3600) else 0
         return icao24_score, callsign_score, route_score, active_or_recent, max(first_seen, last_seen)
+
+    @staticmethod
+    def _best_complete_callsign_flight(candidates: list[dict[str, Any]], callsign: str, now: int) -> dict[str, Any] | None:
+        normalized_callsign = re.sub(r"\s+", "", callsign or "").upper()
+        if not normalized_callsign:
+            return None
+        matches = [
+            item
+            for item in candidates
+            if re.sub(r"\s+", "", str(item.get("callsign") or "")).upper() == normalized_callsign
+            and item.get("estDepartureAirport")
+            and item.get("estArrivalAirport")
+        ]
+        if not matches:
+            return None
+        return max(matches, key=lambda item: RouteResolver._flight_score(item, normalized_callsign, now))
 
     @staticmethod
     def _clamp_to_two_utc_days(begin: int, end: int) -> int:
