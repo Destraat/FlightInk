@@ -295,12 +295,15 @@ def _draw_info_panel(
         ("SNELHEID", _format_speed(aircraft), _icon_speed),
         ("KOERS", _format_track(aircraft), _icon_compass),
         ("AFSTAND", f"{aircraft.distance_km:.1f} km".replace(".", ","), _icon_pin),
-        ("OVER ONS HUIS", _format_eta(prediction), _icon_clock),
+        ("HUIS", _format_eta(prediction), _icon_clock),
     ]
+    value_right = x2 - 12
     for label, value, icon in metrics:
         icon(draw, x1 + 10, cursor + 1)
         draw.text((x1 + 28, cursor), label, font=fonts["tiny"], fill=82)
-        value_x = x1 + 128 if label == "OVER ONS HUIS" else x1 + 104
+        value_box = draw.textbbox((0, 0), value, font=fonts["small_bold"])
+        value_width = value_box[2] - value_box[0]
+        value_x = max(x1 + 104, value_right - value_width)
         draw.text((value_x, cursor), value, font=fonts["small_bold"], fill=24)
         cursor += 18
 
