@@ -46,14 +46,14 @@ def _draw_landmark_asset(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y
         if asset is None:
             continue
         panel = Image.new("L", (max(1, x2 - x1 + 1), max(1, y2 - y1 + 1)), 244)
-        prepared = ImageOps.autocontrast(asset, cutoff=2)
-        inner_w = max(1, panel.size[0] - 8)
-        inner_h = max(1, panel.size[1] - 8)
+        prepared = _prepare_asset(asset)
+        inner_w = max(1, panel.size[0] - 10)
+        inner_h = max(1, panel.size[1] - 10)
         fitted = _fit_asset(prepared, (inner_w, inner_h))
         # Strong two-tone contrast survives e-ink dithering much better.
         fitted = fitted.point(lambda px: 20 if px < 150 else 236)
         ox = (panel.size[0] - fitted.size[0]) // 2
-        oy = (panel.size[1] - fitted.size[1]) // 2
+        oy = max(3, panel.size[1] - fitted.size[1] - 4)
         panel.paste(fitted, (ox, oy))
         ImageDraw.Draw(panel).rounded_rectangle((0, 0, panel.size[0] - 1, panel.size[1] - 1), radius=4, outline=70, width=1)
         image.paste(panel, (x1, y1))
@@ -106,6 +106,28 @@ def _fit_asset(asset: Image.Image, size: tuple[int, int]) -> Image.Image:
     width = max(1, int(asset.width * ratio))
     height = max(1, int(asset.height * ratio))
     return asset.resize((width, height), Image.Resampling.LANCZOS)
+
+
+def _prepare_asset(asset: Image.Image) -> Image.Image:
+    prepared = ImageOps.autocontrast(asset, cutoff=2)
+    trimmed = _trim_asset_bounds(prepared)
+    if trimmed is None:
+        return prepared
+    return trimmed
+
+
+def _trim_asset_bounds(asset: Image.Image) -> Image.Image | None:
+    margin = 6
+    dark = asset.point(lambda px: 255 if px < 220 else 0)
+    bbox = dark.getbbox()
+    if bbox is None:
+        return None
+    left = max(0, bbox[0] - margin)
+    top = max(0, bbox[1] - margin)
+    right = min(asset.width, bbox[2] + margin)
+    bottom = min(asset.height, bbox[3] + margin)
+    trimmed = asset.crop((left, top, right, bottom))
+    return trimmed if trimmed.width > 0 and trimmed.height > 0 else None
 
 
 def _normalise(value: str) -> str:
