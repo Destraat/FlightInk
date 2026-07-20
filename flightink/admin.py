@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import html
 import os
+import re
 import sqlite3
 import subprocess
 from pathlib import Path
 
 import requests
+from dotenv import dotenv_values
 from flask import Flask, Response, redirect, render_template_string, request, send_file, url_for
 
 from .planespotters import AircraftPhoto, PlanespottersClient
@@ -89,22 +91,33 @@ def create_admin_app() -> Flask:
 
 
 def _read_env() -> dict[str, str]:
-    values: dict[str, str] = {}
     if not ENV_PATH.exists():
-        return values
-    for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip()
-    return values
+        return {}
+    parsed = dotenv_values(ENV_PATH)
+    return {
+        str(key): str(value)
+        for key, value in parsed.items()
+        if key is not None and value is not None
+    }
 
 
 def _write_env(values: dict[str, str]) -> None:
     temporary = ENV_PATH.with_suffix(".tmp")
-    temporary.write_text("\n".join(f"{key}={values[key]}" for key in sorted(values)) + "\n", encoding="utf-8")
+    temporary.write_text(
+        "\n".join(f"{key}={_format_env_value(values[key])}" for key in sorted(values)) + "\n",
+        encoding="utf-8",
+    )
     temporary.replace(ENV_PATH)
+
+
+def _format_env_value(value: str) -> str:
+    text = str(value)
+    if not text:
+        return '""'
+    if re.fullmatch(r"[A-Za-z0-9_./:@+-]+", text):
+        return text
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def _validate_config(values: dict[str, str]) -> None:

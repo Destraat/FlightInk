@@ -45,6 +45,35 @@ def test_admin_health_and_config(tmp_path: Path, monkeypatch) -> None:
     assert "HOME_LAT=50.8600" in env_path.read_text(encoding="utf-8")
 
 
+def test_admin_quotes_env_values_that_break_systemd_environmentfile(tmp_path: Path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "HOME_LAT=50.8514\nHOME_LON=5.6910\nREFRESH_SECONDS=60\nDISPLAY_BACKEND=preview\nPHOTO_PROVIDER=planespotters\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(admin, "ENV_PATH", env_path)
+    monkeypatch.setattr(admin, "OUTPUT_PATH", tmp_path / "preview.png")
+    monkeypatch.setattr(admin, "DB_PATH", tmp_path / "flightink.db")
+    monkeypatch.setattr(admin, "_service_status", lambda: "active")
+    app = admin.create_admin_app()
+    client = app.test_client()
+
+    saved = client.post("/config", data={
+        "HOME_LAT": "50.8600",
+        "HOME_LON": "5.7000",
+        "REFRESH_SECONDS": "90",
+        "DISPLAY_BACKEND": "preview",
+        "RADIUS_NM": "10",
+        "PHOTO_PROVIDER": "planespotters",
+        "PLANESPOTTERS_USER_AGENT": "FlightInk/1.0 (+mailto:harrysmits08@gmail.com)",
+    })
+
+    assert saved.status_code == 302
+    written = env_path.read_text(encoding="utf-8")
+    assert 'PLANESPOTTERS_USER_AGENT="FlightInk/1.0 (+mailto:harrysmits08@gmail.com)"' in written
+    assert admin._read_env()["PLANESPOTTERS_USER_AGENT"] == "FlightInk/1.0 (+mailto:harrysmits08@gmail.com)"
+
+
 def test_admin_main_uses_non_conflicting_default_port(monkeypatch) -> None:
     calls: dict[str, object] = {}
 
