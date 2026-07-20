@@ -277,16 +277,53 @@ class RouteResolver:
                 fallback = self._resolve_opensky_airport_flights("departure", origin, icao24, callsign, now, headers, int(best.get("firstSeen") or now))
             except requests.RequestException:
                 LOGGER.info("OpenSky departure fallback failed for %s (%s)", origin, icao24, exc_info=True)
-                return route
-            return self._merge_routes(fallback, route)
+                fallback_route = route
+            else:
+                fallback_route = self._merge_routes(fallback, route)
+            if fallback_route.origin and fallback_route.destination:
+                return fallback_route
+            callsign_fallback = self._resolve_opensky_callsign_flights(callsign, now, headers)
+            return self._merge_routes(callsign_fallback, fallback_route)
         if destination and not origin:
             try:
                 fallback = self._resolve_opensky_airport_flights("arrival", destination, icao24, callsign, now, headers, int(best.get("lastSeen") or now))
             except requests.RequestException:
                 LOGGER.info("OpenSky arrival fallback failed for %s (%s)", destination, icao24, exc_info=True)
-                return route
-            return self._merge_routes(fallback, route)
-        return route
+                fallback_route = route
+            else:
+                fallback_route = self._merge_routes(fallback, route)
+            if fallback_route.origin and fallback_route.destination:
+                return fallback_route
+            callsign_fallback = self._resolve_opensky_callsign_flights(callsign, now, headers)
+            return self._merge_routes(callsign_fallback, fallback_route)
+        callsign_fallback = self._resolve_opensky_callsign_flights(callsign, now, headers)
+        return self._merge_routes(callsign_fallback, route)
+
+    def _resolve_opensky_callsign_flights(self, callsign: str, now: int, headers: dict[str, str]) -> Route:
+        normalized_callsign = re.sub(r"\s+", "", callsign or "").upper()
+        if not normalized_callsign:
+            return Route()
+        begin = self._clamp_to_two_utc_days(now - 24 * 3600, now)
+        response = self.session.get(
+            f"{self.settings.opensky_api_base}/flights/all",
+            params={"begin": begin, "end": now},
+            headers=headers,
+            timeout=self.settings.request_timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, list):
+            return Route()
+        candidates = [item for item in payload if isinstance(item, dict)]
+        best = self._best_complete_callsign_flight(candidates, normalized_callsign, now)
+        if not best:
+            return Route()
+        return self._build_route(
+            best.get("estDepartureAirport"),
+            best.get("estArrivalAirport"),
+            source="opensky_callsign_flights",
+            verified_at=str(best.get("lastSeen") or best.get("firstSeen") or now),
+        )
 
     def _resolve_opensky_airport_flights(
         self,

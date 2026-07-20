@@ -172,6 +172,42 @@ def test_partial_route_hints_are_completed_by_opensky() -> None:
     assert len(session.get_calls) == 1
 
 
+def test_callsign_flights_fallback_completes_partial_aircraft_route() -> None:
+    session = FakeSession(
+        [],
+        payloads_by_suffix={
+            "/flights/aircraft": [
+                {
+                    "icao24": "3c6666",
+                    "callsign": "DLH9LV",
+                    "firstSeen": 100,
+                    "lastSeen": 200,
+                    "estDepartureAirport": "EDDF",
+                    "estArrivalAirport": None,
+                }
+            ],
+            "/flights/all": [
+                {
+                    "icao24": "3c7777",
+                    "callsign": "DLH9LV",
+                    "firstSeen": 80,
+                    "lastSeen": 150,
+                    "estDepartureAirport": "EDDF",
+                    "estArrivalAirport": "EHAM",
+                }
+            ],
+        },
+    )
+    resolver = RouteResolver(FakeStorage(), settings(), session)  # type: ignore[arg-type]
+
+    route = resolver.resolve("DLH9LV", "3C6666", "D-AIXX")
+
+    assert route.origin == "FRA"
+    assert route.destination == "AMS"
+    assert route.source == "opensky_callsign_flights"
+    assert [call["url"].rsplit("/", 1)[-1] for call in session.get_calls] == ["aircraft", "departure", "all"]
+
+
 def test_airport_departure_fallback_completes_partial_aircraft_route() -> None:
     session = FakeSession(
         [],
