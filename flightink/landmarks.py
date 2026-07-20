@@ -412,9 +412,32 @@ def _belem_tower(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y2: int) 
 
 def _burj_khalifa(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y2: int) -> None:
     cx = (x1 + x2) // 2
-    draw.polygon(((cx, y1), (cx - 5, y1 + 19), (cx - 10, y1 + 31), (cx - 15, y2), (cx + 15, y2), (cx + 10, y1 + 31), (cx + 5, y1 + 19)), outline=25, fill=190)
-    draw.line((cx, y1 - 3, cx, y1 + 4), fill=25, width=1)
-    _small_skyline(draw, x1, y2 - 17, x2, y2)
+    base = y2
+    podium_top = y2 - 10
+    draw.line((x1 + 8, base, x2 - 8, base), fill=35, width=2)
+    draw.rectangle((cx - 26, podium_top, cx + 26, base), outline=30, fill=214, width=2)
+    silhouette = (
+        (cx - 24, podium_top),
+        (cx - 18, y1 + 64),
+        (cx - 14, y1 + 50),
+        (cx - 10, y1 + 38),
+        (cx - 7, y1 + 24),
+        (cx - 4, y1 + 12),
+        (cx - 2, y1 + 6),
+        (cx, y1),
+        (cx + 2, y1 + 8),
+        (cx + 5, y1 + 18),
+        (cx + 8, y1 + 30),
+        (cx + 12, y1 + 46),
+        (cx + 17, y1 + 60),
+        (cx + 23, podium_top),
+    )
+    draw.polygon(silhouette, outline=25, fill=188)
+    draw.line((cx, y1 - 2, cx, y1 + 4), fill=20, width=1)
+    for inset, top_y in ((18, y1 + 60), (13, y1 + 46), (9, y1 + 31), (6, y1 + 20)):
+        draw.line((cx - inset, top_y, cx + inset - 1, top_y), fill=105, width=1)
+    for side_x, width, height in ((x1 + 18, 16, 16), (x1 + 42, 20, 23), (x2 - 61, 18, 19), (x2 - 33, 14, 13)):
+        draw.rectangle((side_x, base - height, side_x + width, base), outline=45, fill=220, width=1)
 
 
 def _statue_of_liberty(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y2: int) -> None:
