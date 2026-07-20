@@ -25,23 +25,39 @@ def draw_landmark(
     visible after conversion to the Waveshare panel's one-bit output. Unknown
     landmarks receive a full skyline fallback instead of an empty box.
     """
-    if _draw_landmark_asset(draw, x1, y1, x2, y2, landmark):
+    if _draw_landmark_asset(draw, x1, y1, x2, y2, landmark, allow_default=False):
+        return
+
+    key = _normalise(landmark)
+    drawer = _resolve_drawer(key)
+    if drawer is not _skyline:
+        draw.rounded_rectangle((x1, y1, x2, y2), radius=4, outline=70, width=1, fill=238)
+        draw.line((x1 + 3, y2 - 5, x2 - 3, y2 - 5), fill=55, width=2)
+        drawer(draw, x1 + 5, y1 + 3, x2 - 5, y2 - 6)
+        return
+
+    if _draw_landmark_asset(draw, x1, y1, x2, y2, landmark, allow_default=True):
         return
 
     draw.rounded_rectangle((x1, y1, x2, y2), radius=4, outline=70, width=1, fill=238)
     draw.line((x1 + 3, y2 - 5, x2 - 3, y2 - 5), fill=55, width=2)
-
-    key = _normalise(landmark)
-    drawer = _resolve_drawer(key)
     drawer(draw, x1 + 5, y1 + 3, x2 - 5, y2 - 6)
 
 
-def _draw_landmark_asset(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y2: int, landmark: str) -> bool:
+def _draw_landmark_asset(
+    draw: ImageDraw.ImageDraw,
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    landmark: str,
+    allow_default: bool,
+) -> bool:
     image = getattr(draw, "_image", None)
     if not isinstance(image, Image.Image):
         return False
 
-    for slug in _asset_candidates(landmark):
+    for slug in _asset_candidates(landmark, allow_default=allow_default):
         asset = _load_asset(slug)
         if asset is None:
             continue
@@ -61,7 +77,7 @@ def _draw_landmark_asset(draw: ImageDraw.ImageDraw, x1: int, y1: int, x2: int, y
     return False
 
 
-def _asset_candidates(landmark: str) -> list[str]:
+def _asset_candidates(landmark: str, allow_default: bool) -> list[str]:
     name = _normalise(landmark)
     raw = (landmark or "").strip()
     candidates = [_slugify(name)]
@@ -71,7 +87,8 @@ def _asset_candidates(landmark: str) -> list[str]:
         candidates.append("barcelona")
     if "eiffel" in name or "parijs" in name:
         candidates.append("paris")
-    candidates.append("default")
+    if allow_default:
+        candidates.append("default")
     values: list[str] = []
     for item in candidates:
         if not item:

@@ -1,3 +1,4 @@
+import flightink.landmarks as landmarks_module
 from PIL import Image, ImageDraw
 
 from flightink.landmarks import _trim_asset_bounds, _trim_dense_edge, draw_landmark
@@ -57,3 +58,18 @@ def test_trim_asset_bounds_removes_dense_edge_bands() -> None:
 
 def test_trim_dense_edge_counts_dense_and_empty_rows() -> None:
     assert _trim_dense_edge([100, 90, 0, 4, 3], 100) == 3
+
+
+def test_known_landmark_uses_drawer_before_default_asset(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    seen: list[str] = []
+
+    def fake_load(slug: str):  # type: ignore[no-untyped-def]
+        seen.append(slug)
+        return None
+
+    monkeypatch.setattr(landmarks_module, "_load_asset", fake_load)
+    image = Image.new("L", (210, 70), 255)
+    draw_landmark(ImageDraw.Draw(image), 2, 2, 207, 67, "Burj Khalifa")
+
+    assert "default" not in seen
+    assert "dest-default" not in seen
