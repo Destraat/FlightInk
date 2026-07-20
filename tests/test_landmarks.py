@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw
 
-from flightink.landmarks import _trim_asset_bounds, draw_landmark
+from flightink.landmarks import _trim_asset_bounds, _trim_dense_edge, draw_landmark
 
 
 def _ink_pixels(name: str) -> int:
@@ -37,3 +37,23 @@ def test_trim_asset_bounds_removes_large_white_margins() -> None:
     assert trimmed is not None
     assert trimmed.width < image.width
     assert trimmed.height < image.height
+
+
+def test_trim_asset_bounds_removes_dense_edge_bands() -> None:
+    image = Image.new("L", (120, 60), 244)
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 2, 119, 3), fill=20)
+    draw.rectangle((0, 56, 119, 57), fill=20)
+    draw.rectangle((2, 0, 3, 59), fill=20)
+    draw.rectangle((116, 0, 117, 59), fill=20)
+    draw.rectangle((30, 12, 90, 46), fill=20)
+
+    trimmed = _trim_asset_bounds(image)
+
+    assert trimmed is not None
+    assert trimmed.width < 100
+    assert trimmed.height < 50
+
+
+def test_trim_dense_edge_counts_dense_and_empty_rows() -> None:
+    assert _trim_dense_edge([100, 90, 0, 4, 3], 100) == 3

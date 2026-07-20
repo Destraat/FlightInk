@@ -119,6 +119,18 @@ def _prepare_asset(asset: Image.Image) -> Image.Image:
 def _trim_asset_bounds(asset: Image.Image) -> Image.Image | None:
     margin = 6
     dark = asset.point(lambda px: 255 if px < 220 else 0)
+    dark_rows = [sum(1 for x in range(asset.width) if dark.getpixel((x, y))) for y in range(asset.height)]
+    top = _trim_dense_edge(dark_rows, asset.width)
+    bottom = _trim_dense_edge(list(reversed(dark_rows)), asset.width)
+    if top or bottom:
+        asset = asset.crop((0, top, asset.width, max(top + 1, asset.height - bottom)))
+        dark = asset.point(lambda px: 255 if px < 220 else 0)
+    dark_cols = [sum(1 for y in range(asset.height) if dark.getpixel((x, y))) for x in range(asset.width)]
+    left = _trim_dense_edge(dark_cols, asset.height)
+    right = _trim_dense_edge(list(reversed(dark_cols)), asset.height)
+    if left or right:
+        asset = asset.crop((left, 0, max(left + 1, asset.width - right), asset.height))
+        dark = asset.point(lambda px: 255 if px < 220 else 0)
     bbox = dark.getbbox()
     if bbox is None:
         return None
@@ -128,6 +140,21 @@ def _trim_asset_bounds(asset: Image.Image) -> Image.Image | None:
     bottom = min(asset.height, bbox[3] + margin)
     trimmed = asset.crop((left, top, right, bottom))
     return trimmed if trimmed.width > 0 and trimmed.height > 0 else None
+
+
+def _trim_dense_edge(counts: list[int], span: int) -> int:
+    trimmed = 0
+    dense_threshold = max(1, int(span * 0.75))
+    sparse_threshold = max(4, int(span * 0.03))
+    for value in counts:
+        if value == 0 or value >= dense_threshold:
+            trimmed += 1
+            continue
+        if value <= sparse_threshold and trimmed < 2:
+            trimmed += 1
+            continue
+        break
+    return trimmed
 
 
 def _normalise(value: str) -> str:
