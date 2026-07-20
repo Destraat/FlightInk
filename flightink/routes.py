@@ -227,7 +227,8 @@ class RouteResolver:
 
     def _resolve_opensky(self, icao24: str, callsign: str) -> Route:
         now = int(time.time())
-        begin = now - self.settings.opensky_route_lookback_hours * 3600
+        requested_begin = now - self.settings.opensky_route_lookback_hours * 3600
+        begin = self._clamp_to_two_utc_days(requested_begin, now)
         headers = {"Accept": "application/json"}
         token = self._access_token()
         if token:
@@ -293,7 +294,7 @@ class RouteResolver:
         # full recent window to recover routes that were not yet complete in
         # the newest aircraft-flight record.
         _ = reference_time
-        begin = max(0, now - ((48 * 3600) - 1))
+        begin = self._clamp_to_two_utc_days(now - ((48 * 3600) - 1), now)
         end = now
         response = self.session.get(
             f"{self.settings.opensky_api_base}/flights/{endpoint}",
@@ -345,6 +346,14 @@ class RouteResolver:
         last_seen = int(item.get("lastSeen") or 0)
         active_or_recent = 1 if first_seen <= now and (not last_seen or last_seen >= now - 12 * 3600) else 0
         return icao24_score, callsign_score, route_score, active_or_recent, max(first_seen, last_seen)
+
+    @staticmethod
+    def _clamp_to_two_utc_days(begin: int, end: int) -> int:
+        end = max(0, int(end))
+        begin = max(0, int(begin))
+        start_of_today_utc = end - (end % 86400)
+        earliest_supported = max(0, start_of_today_utc - 86400)
+        return max(begin, earliest_supported)
 
     def _build_route(
         self,
